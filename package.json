@@ -1,0 +1,23 @@
+{
+  "name": "workbench",
+  "private": true,
+  "version": "0.1.0",
+  "description": "全域自媒体工作台 - 个人/小团队多平台内容运营",
+  "scripts": {
+    "dev": "npx serve . -l 4173",
+    "vercel:dev": "vercel dev",
+    "vercel:deploy": "vercel --prod",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "vercel": "^32.0.0"
+  }
+}

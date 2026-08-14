@@ -1,0 +1,12 @@
+node_modules
+.vercel
+.env
+.env.local
+*.log
+.DS_Store
+
+.vercel
+
+# Tauri 编译产物
+src-tauri/target/
+src-tauri/gen/schemas/

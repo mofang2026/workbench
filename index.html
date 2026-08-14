@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050a14" />
+    <title>全域自媒体工作台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/styles.css?v=20260823" />
+  </head>
+  <body>
+    <!-- ========== 登录遮罩（未配置 Supabase / 未登录时显示） ========== -->
+    <div id="authMask" class="auth-mask">
+      <div class="auth-box">
+        <h2>全域自媒体工作台</h2>
+        <p class="sub">一个后台，搞定四平台全流程：选题 → 创作 → 适配 → 质检 → 排期 → 发布 → 复盘</p>
+
+        <div id="authStepConfig" class="col">
+          <div class="field">
+            <label class="field-label">Supabase URL</label>
+            <input id="cfgSupabaseUrl" class="input" placeholder="https://xxxxx.supabase.co" />
+          </div>
+          <div class="field">
+            <label class="field-label">Supabase Anon Key</label>
+            <input id="cfgSupabaseKey" class="input" placeholder="eyJxxxxx" />
+          </div>
+          <button id="btnSaveConfig" class="btn btn-primary" style="width: 100%; justify-content: center;">
+            保存配置
+          </button>
+          <p class="text-xs muted-2" style="text-align: center; margin-top: 4px;">
+            配置保存在本地浏览器，仅用于连接你自己的 Supabase 项目
+          </p>
+        </div>
+
+        <div id="authStepLogin" class="col hidden">
+          <div class="field">
+            <label class="field-label">邮箱</label>
+            <input id="loginEmail" class="input" type="email" placeholder="you@example.com" />
+          </div>
+          <div class="field">
+            <label class="field-label">密码</label>
+            <input id="loginPassword" class="input" type="password" placeholder="至少 6 位" />
+          </div>
+          <button id="btnLogin" class="btn btn-primary" style="width: 100%; justify-content: center;">
+            登录 / 注册
+          </button>
+          <p class="text-xs muted-2" style="text-align: center; margin-top: 4px;">
+            首次输入的邮箱会自动创建账号
+          </p>
+        </div>
+
+        <div id="authError" class="text-xs text-danger hidden" style="margin-top: 8px; text-align: center;"></div>
+      </div>
+    </div>
+
+    <!-- ========== 顶部导航 ========== -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo">W</div>
+        <span>全域自媒体工作台</span>
+      </div>
+      <nav class="nav" id="mainNav">
+        <a class="nav-link active" data-page="dashboard">仪表盘</a>
+        <a class="nav-link" data-page="topics">选题灵感库</a>
+        <a class="nav-link" data-page="hot-radar">热点雷达</a>
+        <a class="nav-link" data-page="keywords">关键词库</a>
+        <a class="nav-link" data-page="content">内容创作</a>
+        <a class="nav-link" data-page="video-script">视频脚本</a>
+        <a class="nav-link" data-page="card-design">卡片设计</a>
+        <a class="nav-link" data-page="calendar">内容日历</a>
+        <a class="nav-link" data-page="assets">素材资源库</a>
+        <a class="nav-link" data-page="metrics">数据复盘</a>
+        <a class="nav-link" data-page="templates">模板中心</a>
+        <a class="nav-link" data-page="rules">规则库</a>
+        <a class="nav-link" data-page="settings">账号与设置</a>
+      </nav>
+      <div class="topbar-right">
+        <span id="userBadge" class="tag brand hidden"></span>
+        <button id="btnLogout" class="btn btn-ghost btn-sm hidden">退出</button>
+      </div>
+    </header>
+
+    <!-- ========== 主体 ========== -->
+    <main class="app-shell">
+      <!-- 仪表盘页 -->
+      <section id="page-dashboard" class="page">
+        <div class="hero">
+          <p class="eyebrow muted-2 text-xs">WORKBENCH · DASHBOARD</p>
+          <h1 id="greeting">早上好，开始今天的创作</h1>
+          <p class="sub">今日待发布 <span id="todayPending" class="text-warm">0</span> 篇 · 本月已发 <span id="monthPublished">0</span> 篇</p>
+        </div>
+
+        <!-- 全域汇总统计 -->
+        <h3 class="section-title">全域汇总</h3>
+        <div class="grid grid-4 mb-lg">
+          <div class="card stat-card">
+            <div class="stat-label">总粉丝数</div>
+            <div class="stat-num" id="statTotalFans">—</div>
+            <div class="stat-sub"><span class="stat-trend-up">+0</span> 本周</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">本月内容发布量</div>
+            <div class="stat-num" id="statMonthPublished">—</div>
+            <div class="stat-sub">目标 30 篇</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">平均互动率</div>
+            <div class="stat-num" id="statAvgEngagement">—</div>
+            <div class="stat-sub">(赞+评+藏) / 阅读</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">本月爆款</div>
+            <div class="stat-num" id="statViralCount">—</div>
+            <div class="stat-sub">互动率 > 5%</div>
+          </div>
+        </div>
+
+        <!-- 四平台独立卡片 -->
+        <h3 class="section-title">四平台速览</h3>
+        <div class="grid grid-4 mb-lg" id="platformCards">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+
+        <!-- 快捷操作 + 状态预警 -->
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-title">
+              <span>快捷操作</span>
+              <span class="ai-badge">AI 辅助</span>
+            </div>
+            <div class="grid grid-4" id="quickActions">
+              <div class="quick-action" data-action="new-topic">
+                <div class="qa-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                </div>
+                <div class="qa-label">新建选题</div>
+              </div>
+              <div class="quick-action" data-action="new-content">
+                <div class="qa-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4l10-10-4-4L4 16Z"/></svg>
+                </div>
+                <div class="qa-label">新建文稿</div>
+              </div>
+              <div class="quick-action" data-action="ai-rewrite">
+                <div class="qa-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/></svg>
+                </div>
+                <div class="qa-label">跨平台改写</div>
+              </div>
+              <div class="quick-action" data-action="ai-check">
+                <div class="qa-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+                </div>
+                <div class="qa-label">内容自检</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>状态预警</span>
+              <span class="muted" id="alertCount">0 条</span>
+            </div>
+            <div id="alertList">
+              <div class="empty-state">
+                <div class="em-icon">·</div>
+                <div>暂无预警</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 近期爆款 / 待办日历入口 -->
+        <h3 class="section-title">近期动态</h3>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-title">
+              <span>近期爆款</span>
+              <a class="text-xs" data-page="metrics">查看全部 →</a>
+            </div>
+            <div id="recentViral">
+              <div class="empty-state">
+                <div class="em-icon">🔥</div>
+                <div>暂无爆款记录</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">
+              <span>近期待发布</span>
+              <a class="text-xs" data-page="calendar">日历视图 →</a>
+            </div>
+            <div id="recentPending">
+              <div class="empty-state">
+                <div class="em-icon">📅</div>
+                <div>暂无待发布任务</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 其他页面（由 JS 动态渲染内容） -->
+      <section id="page-topics" class="page hidden"></section>
+      <section id="page-hot-radar" class="page hidden"></section>
+      <section id="page-keywords" class="page hidden"></section>
+      <section id="page-content" class="page hidden"></section>
+      <section id="page-calendar" class="page hidden"></section>
+
+      <section id="page-assets" class="page hidden"></section>
+
+      <section id="page-card-design" class="page hidden"></section>
+
+      <section id="page-video-script" class="page hidden"></section>
+
+      <section id="page-metrics" class="page hidden"></section>
+
+      <section id="page-templates" class="page hidden"></section>
+
+      <section id="page-rules" class="page hidden"></section>
+
+      <section id="page-settings" class="page hidden"></section>
+    </main>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="hidden" style="position:fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: var(--surface-strong); border: 1px solid var(--line-strong); border-radius: 10px; z-index: 200; font-size: 13px; box-shadow: var(--shadow-md);"></div>
+
+    <!-- ========== 脚本 ========== -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="assets/js/config.js?v=20260813"></script>
+    <script src="assets/js/utils.js?v=20260813"></script>
+    <script src="assets/js/db-gateway.js?v=20260813"></script>
+    <script src="assets/js/ai-gateway.js?v=20260813"></script>
+    <script src="assets/js/topics.js?v=20260817"></script>
+    <script src="assets/js/keywords.js?v=20260814"></script>
+    <script src="assets/js/content.js?v=20260822"></script>
+    <script src="assets/js/calendar.js?v=20260821"></script>
+    <script src="assets/js/assets.js?v=20260818"></script>
+    <script src="assets/js/metrics.js?v=20260819"></script>
+    <script src="assets/js/templates.js?v=20260819"></script>
+    <script src="assets/js/card-design.js?v=20260823"></script>
+    <script src="assets/js/video-script.js?v=20260823"></script>
+    <script src="assets/js/hot-radar.js?v=20260823"></script>
+    <script src="assets/js/rules.js?v=20260813"></script>
+    <script src="assets/js/settings.js?v=20260813"></script>
+    <script src="assets/js/app.js?v=20260814"></script>
+  </body>
+</html>
