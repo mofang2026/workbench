@@ -2,7 +2,7 @@
  * 流式生成 · POST /api/ai/stream
  * 返回 SSE：data: {"response": "..."}\n\n  data: [DONE]\n\n
  * Vercel Serverless Function (Node.js)
- * 内联所有依赖，避免跨文件 import 问题
+ * 支持多提供商（DeepSeek/智谱AI/Kimi/自定义）+ 故障转移
  */
 
 const CORS_HEADERS = {
@@ -12,14 +12,45 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-function getConfig(useReasoner) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) return null;
-  const baseUrl = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1").replace(/\/+$/, "");
-  const model = useReasoner
-    ? process.env.DEEPSEEK_REASONER_MODEL || "deepseek-reasoner"
-    : process.env.DEEPSEEK_MODEL || "deepseek-chat";
-  return { apiKey, baseUrl, model };
+function getProviders() {
+  const list = [];
+  if (process.env.DEEPSEEK_API_KEY) {
+    list.push({
+      name: "DeepSeek",
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseUrl: (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1").replace(/\/+$/, ""),
+      model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+      reasonerModel: process.env.DEEPSEEK_REASONER_MODEL || "deepseek-reasoner",
+    });
+  }
+  if (process.env.ZHIPU_API_KEY) {
+    list.push({
+      name: "智谱AI",
+      apiKey: process.env.ZHIPU_API_KEY,
+      baseUrl: (process.env.ZHIPU_BASE_URL || "https://open.bigmodel.cn/api/paas/v4").replace(/\/+$/, ""),
+      model: process.env.ZHIPU_MODEL || "glm-4-plus",
+      reasonerModel: process.env.ZHIPU_REASONER_MODEL || "glm-4-plus",
+    });
+  }
+  if (process.env.MOONSHOT_API_KEY) {
+    list.push({
+      name: "Kimi",
+      apiKey: process.env.MOONSHOT_API_KEY,
+      baseUrl: (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/+$/, ""),
+      model: process.env.MOONSHOT_MODEL || "moonshot-v1-8k",
+      reasonerModel: process.env.MOONSHOT_REASONER_MODEL || "moonshot-v1-8k",
+    });
+  }
+  if (process.env.CUSTOM_AI_API_KEY && process.env.CUSTOM_AI_BASE_URL) {
+    list.push({
+      name: "自定义AI",
+      apiKey: process.env.CUSTOM_AI_API_KEY,
+      baseUrl: process.env.CUSTOM_AI_BASE_URL.replace(/\/+$/, ""),
+      model: process.env.CUSTOM_AI_MODEL || "gpt-4o-mini",
+      reasonerModel: process.env.CUSTOM_AI_REASONER_MODEL || process.env.CUSTOM_AI_MODEL || "gpt-4o-mini",
+    });
+  }
+  return list;
 }
 
 function sendJson(res, body, status) {
@@ -39,7 +70,6 @@ function buildMessages(prompt, system) {
 }
 
 module.exports = async (req, res) => {
-  // CORS 预检
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     for (const [k, v] of Object.entries(CORS_HEADERS)) {
@@ -53,7 +83,6 @@ module.exports = async (req, res) => {
     return sendJson(res, { error: "Method not allowed" }, 405);
   }
 
-  // 解析请求体
   let body;
   try {
     const chunks = [];
@@ -68,13 +97,17 @@ module.exports = async (req, res) => {
   const { prompt, system = "", useReasoner = false, temperature, maxTokens } = body;
   if (!prompt) return sendJson(res, { error: "prompt required" }, 400);
 
-  const cfg = getConfig(useReasoner);
-  if (!cfg) {
-    return sendJson(res, { error: "DEEPSEEK_API_KEY 未配置" }, 500);
+  const providers = getProviders();
+  if (providers.length === 0) {
+    return sendJson(res, { error: "服务端未配置任何 AI 提供商的环境变量" }, 500);
   }
 
+  // 流式只尝试第一个可用提供商（SSE 开始后无法切换）
+  const provider = providers[0];
+  const model = useReasoner ? provider.reasonerModel : provider.model;
+
   const reqBody = {
-    model: cfg.model,
+    model,
     messages: buildMessages(prompt, system),
     stream: true,
     temperature: temperature != null ? temperature : 0.7,
@@ -82,21 +115,20 @@ module.exports = async (req, res) => {
   };
 
   try {
-    const upstream = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    const upstream = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${cfg.apiKey}`,
+        Authorization: `Bearer ${provider.apiKey}`,
       },
       body: JSON.stringify(reqBody),
     });
 
     if (!upstream.ok) {
       const t = await upstream.text();
-      return sendJson(res, { error: `DeepSeek ${upstream.status}: ${t.slice(0, 200)}` }, 502);
+      return sendJson(res, { error: `${provider.name} ${upstream.status}: ${t.slice(0, 200)}` }, 502);
     }
 
-    // 设置 SSE 响应头
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -105,7 +137,6 @@ module.exports = async (req, res) => {
       res.setHeader(k, v);
     }
 
-    // 读取上游 SSE 流并转换格式
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
@@ -116,7 +147,7 @@ module.exports = async (req, res) => {
 
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split("\n");
-      buf = lines.pop(); // 保留最后不完整的行
+      buf = lines.pop();
 
       for (const line of lines) {
         const trimmed = line.trim();

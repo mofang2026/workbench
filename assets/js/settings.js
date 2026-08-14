@@ -216,57 +216,67 @@ const Settings = (function () {
     URL.revokeObjectURL(url);
   }
 
-  // ========== AI 配置 ==========
+  // ========== AI 配置（多提供商 + 故障转移） ==========
 
   function renderAiConfig() {
     const s = window.AiGateway.getSettings();
+    const isCloudBase = window.location.hostname.includes("tcloudbaseapp.com");
     const card = $("aiConfigCard");
+    const providerKeys = Object.keys(s.providers);
+
     card.innerHTML = `
       <div class="card-title">
         <span>AI 配置</span>
-        <span class="ai-badge">DeepSeek</span>
+        <span class="ai-badge">多提供商</span>
       </div>
       <p class="text-xs muted mb-md">
-        本地开发选「直连模式」并填入 DeepSeek API Key；生产环境（Vercel 部署后）选「代理模式」由服务端调用，Key 不暴露。
+        支持配置多个 AI 提供商，主用失败时自动切换备用。CloudBase 部署请使用「直连模式」。
       </p>
 
+      ${isCloudBase ? `
+        <div class="callout callout-warning mb-md">
+          <strong>⚠ CloudBase 环境</strong>：当前部署在 CloudBase 静态托管，不支持代理模式。请使用「直连模式」并配置 API Key。
+        </div>
+      ` : ""}
+
+      <!-- 调用模式 -->
       <div class="field">
         <label class="field-label">调用模式</label>
         <div class="row gap-md">
           <label class="row gap-sm">
             <input type="radio" name="aiMode" value="direct" ${s.mode === "direct" ? "checked" : ""} />
-            <span class="text-sm">直连模式（本地开发推荐）</span>
+            <span class="text-sm">直连模式（前端直调 API）</span>
           </label>
-          <label class="row gap-sm">
-            <input type="radio" name="aiMode" value="proxy" ${s.mode === "proxy" ? "checked" : ""} />
-            <span class="text-sm">代理模式（生产推荐）</span>
+          <label class="row gap-sm ${isCloudBase ? "muted-2" : ""}">
+            <input type="radio" name="aiMode" value="proxy" ${s.mode === "proxy" ? "checked" : ""} ${isCloudBase ? "disabled" : ""} />
+            <span class="text-sm">代理模式（仅 Vercel）${isCloudBase ? " · 当前不可用" : ""}</span>
           </label>
         </div>
       </div>
 
-      <div class="grid grid-2">
-        <div class="field">
-          <label class="field-label">DeepSeek API Key</label>
-          <input id="aiApiKey" class="input" type="password" value="${escapeAttr(s.apiKey)}" placeholder="sk-xxxxxxxxxxxxxxxx" />
-        </div>
-        <div class="field">
-          <label class="field-label">Base URL</label>
-          <input id="aiBaseUrl" class="input" value="${escapeAttr(s.baseUrl)}" placeholder="https://api.deepseek.com/v1" />
-        </div>
+      <!-- 故障转移开关 -->
+      <div class="field">
+        <label class="row gap-sm">
+          <input type="checkbox" id="aiFailover" ${s.failoverEnabled !== false ? "checked" : ""} />
+          <span class="text-sm">启用自动故障转移（主用失败时自动尝试备用提供商）</span>
+        </label>
       </div>
 
-      <div class="grid grid-2">
-        <div class="field">
-          <label class="field-label">主模型（通用对话）</label>
-          <input id="aiModel" class="input" value="${escapeAttr(s.model)}" placeholder="deepseek-chat" />
-        </div>
-        <div class="field">
-          <label class="field-label">推理模型（质检/打分）</label>
-          <input id="aiReasonerModel" class="input" value="${escapeAttr(s.reasonerModel)}" placeholder="deepseek-reasoner" />
-        </div>
+      <!-- 主用提供商选择 -->
+      <div class="field">
+        <label class="field-label">主用提供商</label>
+        <select id="aiActiveProvider" class="select">
+          ${providerKeys.map(k => {
+            const p = s.providers[k];
+            return `<option value="${k}" ${s.activeProvider === k ? "selected" : ""}>${escapeHtml(p.name)}${p.apiKey ? " ✓" : " (未配置)"}</option>`;
+          }).join("")}
+        </select>
       </div>
 
-      <div class="row gap-sm mt-md">
+      <!-- 提供商列表 -->
+      <div id="aiProvidersList"></div>
+
+      <div class="row gap-sm mt-md" style="flex-wrap:wrap;">
         <button class="btn btn-primary" id="btnSaveAiConfig">保存配置</button>
         <button class="btn btn-ghost" id="btnTestAi">测试连接</button>
         <span id="aiTestResult" class="text-xs"></span>
@@ -276,55 +286,113 @@ const Settings = (function () {
     document.querySelectorAll('input[name="aiMode"]').forEach((el) => {
       el.addEventListener("change", () => toggleAiModeHint());
     });
+    $("aiFailover").addEventListener("change", () => collectAndSave());
+    $("aiActiveProvider").addEventListener("change", () => collectAndSave());
 
+    renderProviderForms(s);
     $("btnSaveAiConfig").addEventListener("click", saveAiConfig);
     $("btnTestAi").addEventListener("click", testAi);
     toggleAiModeHint();
   }
 
+  // 渲染每个提供商的配置表单
+  function renderProviderForms(s) {
+    const wrap = $("aiProvidersList");
+    wrap.innerHTML = Object.entries(s.providers).map(([k, p]) => `
+      <div class="ai-provider-block" data-provider="${k}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:12px;">
+        <div class="row gap-sm" style="justify-content:space-between; margin-bottom:8px;">
+          <label class="row gap-sm">
+            <input type="checkbox" class="ai-provider-enabled" data-key="${k}" ${p.enabled ? "checked" : ""} />
+            <strong>${escapeHtml(p.name)}</strong>
+          </label>
+          <span class="text-xs ${p.apiKey ? "text-ok" : "muted-2"}">${p.apiKey ? "已配置" : "未配置"}</span>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label class="field-label">API Key</label>
+            <input class="input ai-provider-key" data-key="${k}" type="password" value="${escapeAttr(p.apiKey)}" placeholder="${k === "deepseek" ? "sk-xxx" : k === "zhipu" ? "xxx.xxx" : ""}" />
+          </div>
+          <div class="field">
+            <label class="field-label">Base URL</label>
+            <input class="input ai-provider-url" data-key="${k}" value="${escapeAttr(p.baseUrl)}" placeholder="https://..." />
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label class="field-label">主模型</label>
+            <input class="input ai-provider-model" data-key="${k}" value="${escapeAttr(p.model)}" placeholder="模型名" />
+          </div>
+          <div class="field">
+            <label class="field-label">推理模型（质检/打分）</label>
+            <input class="input ai-provider-reasoner" data-key="${k}" value="${escapeAttr(p.reasonerModel)}" placeholder="推理模型名" />
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    // 启用状态切换联动
+    wrap.querySelectorAll(".ai-provider-enabled").forEach(cb => {
+      cb.addEventListener("change", collectAndSave);
+    });
+  }
+
+  // 从表单收集配置并保存
+  function collectAndSave() {
+    const s = window.AiGateway.getSettings();
+    s.mode = document.querySelector('input[name="aiMode"]:checked')?.value || "direct";
+    s.failoverEnabled = $("aiFailover").checked;
+    s.activeProvider = $("aiActiveProvider").value;
+
+    document.querySelectorAll(".ai-provider-block").forEach(block => {
+      const k = block.dataset.provider;
+      if (!s.providers[k]) return;
+      s.providers[k].enabled = block.querySelector(".ai-provider-enabled").checked;
+      s.providers[k].apiKey = block.querySelector(".ai-provider-key").value.trim();
+      s.providers[k].baseUrl = block.querySelector(".ai-provider-url").value.trim();
+      s.providers[k].model = block.querySelector(".ai-provider-model").value.trim();
+      s.providers[k].reasonerModel = block.querySelector(".ai-provider-reasoner").value.trim();
+    });
+
+    window.AiGateway.saveSettings(s);
+  }
+
   function toggleAiModeHint() {
     const mode = document.querySelector('input[name="aiMode"]:checked')?.value;
-    const keyField = $("aiApiKey").closest(".field");
-    const urlField = $("aiBaseUrl").closest(".field");
-    if (mode === "proxy") {
-      keyField.style.opacity = "0.5";
-      urlField.style.opacity = "0.5";
-    } else {
-      keyField.style.opacity = "1";
-      urlField.style.opacity = "1";
-    }
+    const providerBlocks = document.querySelectorAll(".ai-provider-block");
+    const opacity = mode === "proxy" ? "0.5" : "1";
+    providerBlocks.forEach(b => b.style.opacity = opacity);
   }
 
   function saveAiConfig() {
-    const mode = document.querySelector('input[name="aiMode"]:checked')?.value || "proxy";
-    const settings = {
-      mode,
-      apiKey: $("aiApiKey").value.trim(),
-      baseUrl: $("aiBaseUrl").value.trim() || "https://api.deepseek.com/v1",
-      model: $("aiModel").value.trim() || "deepseek-chat",
-      reasonerModel: $("aiReasonerModel").value.trim() || "deepseek-reasoner",
-    };
-
-    if (mode === "direct" && !settings.apiKey) {
-      toast("直连模式需填写 API Key");
-      return;
+    collectAndSave();
+    const s = window.AiGateway.getSettings();
+    if (s.mode === "direct") {
+      const available = window.AiGateway.getAvailableProviders();
+      if (available.length === 0) {
+        toast("直连模式至少需启用一个提供商并填写 API Key");
+        return;
+      }
     }
-
-    window.AiGateway.saveSettings(settings);
     toast("AI 配置已保存");
   }
 
   async function testAi() {
     const result = $("aiTestResult");
-    // 先保存再测试
-    saveAiConfig();
+    collectAndSave();
     result.innerHTML = '<span class="ai-thinking"><span class="spinner"></span> 测试中...</span>';
     try {
+      const s = window.AiGateway.getSettings();
+      const available = window.AiGateway.getAvailableProviders();
+      if (available.length === 0) {
+        result.innerHTML = '<span class="text-danger">✗ 未配置可用的提供商</span>';
+        return;
+      }
       const text = await window.AiGateway.generate("请回复「连接成功」四个字", {
         system: "简洁回复。",
         maxTokens: 50,
       });
-      result.innerHTML = `<span class="text-ok">✓ 连接成功：${escapeHtml(text.slice(0, 20))}</span>`;
+      const activeName = s.providers[s.activeProvider]?.name || "";
+      result.innerHTML = `<span class="text-ok">✓ ${escapeHtml(activeName)} 连接成功：${escapeHtml(text.slice(0, 20))}</span>`;
     } catch (e) {
       result.innerHTML = `<span class="text-danger">✗ ${escapeHtml(e.message)}</span>`;
     }
