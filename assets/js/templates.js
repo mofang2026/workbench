@@ -14,7 +14,7 @@ const Templates = (function () {
     tag_combo: { name: "标签组合", icon: "#️⃣" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", all: "通用" };
+  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
 
   let cache = [];
   let filterType = "all";
@@ -27,7 +27,7 @@ const Templates = (function () {
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">TEMPLATES · 模板中心</p>
         <h1>模板中心</h1>
-        <p class="sub">四平台排版 · 复用素材 · 标题公式 · 标签组合</p>
+        <p class="sub">八大平台排版 · 复用素材 · 标题公式 · 标签组合</p>
       </div>
 
       <div class="card mb-md">

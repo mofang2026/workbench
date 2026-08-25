@@ -11,14 +11,14 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="assets/css/styles.css?v=20260823" />
+    <link rel="stylesheet" href="assets/css/styles.css?v=20260826b" />
   </head>
   <body>
     <!-- ========== 登录遮罩（未配置 Supabase / 未登录时显示） ========== -->
     <div id="authMask" class="auth-mask">
       <div class="auth-box">
         <h2>全域自媒体工作台</h2>
-        <p class="sub">一个后台，搞定四平台全流程：选题 → 创作 → 适配 → 质检 → 排期 → 发布 → 复盘</p>
+        <p class="sub">一个后台，搞定八大平台全流程：选题 → 创作 → 适配 → 质检 → 排期 → 发布 → 复盘</p>
 
         <div id="authStepConfig" class="col">
           <div class="field">
@@ -67,9 +67,7 @@
       </div>
       <nav class="nav" id="mainNav">
         <a class="nav-link active" data-page="dashboard">仪表盘</a>
-        <a class="nav-link" data-page="topics">选题灵感库</a>
         <a class="nav-link" data-page="hot-radar">热点雷达</a>
-        <a class="nav-link" data-page="keywords">关键词库</a>
         <a class="nav-link" data-page="content">内容创作</a>
         <a class="nav-link" data-page="video-script">视频脚本</a>
         <a class="nav-link" data-page="card-design">卡片设计</a>
@@ -122,7 +120,7 @@
         </div>
 
         <!-- 四平台独立卡片 -->
-        <h3 class="section-title">四平台速览</h3>
+        <h3 class="section-title">八大平台速览</h3>
         <div class="grid grid-4 mb-lg" id="platformCards">
           <!-- 由 JS 动态渲染 -->
         </div>
@@ -207,9 +205,7 @@
       </section>
 
       <!-- 其他页面（由 JS 动态渲染内容） -->
-      <section id="page-topics" class="page hidden"></section>
       <section id="page-hot-radar" class="page hidden"></section>
-      <section id="page-keywords" class="page hidden"></section>
       <section id="page-content" class="page hidden"></section>
       <section id="page-calendar" class="page hidden"></section>
 
@@ -237,20 +233,21 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="assets/js/config.js?v=20260813"></script>
     <script src="assets/js/utils.js?v=20260813"></script>
-    <script src="assets/js/db-gateway.js?v=20260813"></script>
+    <script src="assets/js/db-gateway.js?v=20260826"></script>
     <script src="assets/js/ai-gateway.js?v=20260824"></script>
-    <script src="assets/js/topics.js?v=20260817"></script>
-    <script src="assets/js/keywords.js?v=20260814"></script>
-    <script src="assets/js/content.js?v=20260822"></script>
-    <script src="assets/js/calendar.js?v=20260821"></script>
-    <script src="assets/js/assets.js?v=20260818"></script>
-    <script src="assets/js/metrics.js?v=20260819"></script>
-    <script src="assets/js/templates.js?v=20260819"></script>
+    <script src="assets/js/topics.js?v=20260826b"></script>
+    <script src="assets/js/keywords.js?v=20260826b"></script>
+    <script src="assets/js/content.js?v=20260826b"></script>
+    <script src="assets/js/calendar.js?v=20260826b"></script>
+    <script src="assets/js/assets.js?v=20260826b"></script>
+    <script src="assets/js/metrics.js?v=20260826b"></script>
+    <script src="assets/js/reminders.js?v=20260826"></script>
+    <script src="assets/js/templates.js?v=20260826b"></script>
     <script src="assets/js/card-design.js?v=20260823"></script>
-    <script src="assets/js/video-script.js?v=20260823"></script>
-    <script src="assets/js/hot-radar.js?v=20260823"></script>
-    <script src="assets/js/rules.js?v=20260813"></script>
-    <script src="assets/js/settings.js?v=20260824"></script>
-    <script src="assets/js/app.js?v=20260814"></script>
+    <script src="assets/js/video-script.js?v=20260826b"></script>
+    <script src="assets/js/hot-radar.js?v=20260826b"></script>
+    <script src="assets/js/rules.js?v=20260826b"></script>
+    <script src="assets/js/settings.js?v=20260826b"></script>
+    <script src="assets/js/app.js?v=20260826b"></script>
   </body>
 </html>

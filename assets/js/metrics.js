@@ -4,7 +4,7 @@
  */
 
 const Metrics = (function () {
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号" };
+  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
   let cache = [];
   let contentsMap = {};
   let activeView = "list"; // list | stats
@@ -71,6 +71,8 @@ const Metrics = (function () {
       <div class="card mb-md">
         <div class="row gap-md" style="flex-wrap:wrap; align-items:center;">
           <button class="btn btn-primary btn-sm" id="btnNewMetric">+ 录入数据</button>
+          <button class="btn btn-ghost btn-sm" id="btnImportCsv">导入数据</button>
+          <button class="btn btn-ghost btn-sm" id="btnDownloadTpl">下载模板</button>
           <span class="text-xs muted">${cache.length} 条记录</span>
           <span class="text-xs muted">|</span>
           <span class="text-xs">爆款 <b class="text-warm">${cache.filter(m => m.is_viral).length}</b></span>
@@ -135,6 +137,8 @@ const Metrics = (function () {
 
     $("btnNewMetric")?.addEventListener("click", () => openEditor(null));
     $("btnExportCsv")?.addEventListener("click", exportCsv);
+    $("btnImportCsv")?.addEventListener("click", openImport);
+    $("btnDownloadTpl")?.addEventListener("click", downloadTemplate);
     wrap.querySelectorAll("[data-edit]").forEach(el => {
       el.addEventListener("click", () => openEditor(cache.find(m => m.id === el.dataset.edit)));
     });
@@ -404,7 +408,7 @@ const Metrics = (function () {
     if (!ctx || !window.Chart) return;
 
     const labels = Object.keys(byPlatform).map(k => PLATFORMS[k] || k);
-    const platformColors = { xhs: "#ff2442", douyin: "#25f4ee", bilibili: "#fb7299", wechat: "#07c160" };
+    const platformColors = { xhs: "#ff2442", douyin: "#25f4ee", bilibili: "#fb7299", wechat: "#07c160", shipinhao: "#fa9d3b", kuaishou: "#ff6900", weibo: "#e6162d", toutiao: "#f04142" };
     const colors = Object.keys(byPlatform).map(k => platformColors[k] || "#59c4ff");
 
     chartInstances.platform = new Chart(ctx, {
@@ -716,6 +720,282 @@ const Metrics = (function () {
     a.click();
     URL.revokeObjectURL(url);
     toast("已导出");
+  }
+
+  // ========== CSV 导入 / 模板 ==========
+
+  const IMPORT_HEADERS = ["内容标题", "平台", "阅读", "点赞", "收藏", "评论", "转发", "涨粉", "爆款", "踩坑", "复盘笔记", "记录时间"];
+
+  // 下载导入模板（与导出格式一致，方便导出后编辑再导入）
+  function downloadTemplate() {
+    const sample = ["一篇示例内容标题", "小红书", "120", "35", "12", "8", "3", "15", "是", "", "示例：标题清晰，首图吸睛", "2026-08-01"];
+    const csv = [IMPORT_HEADERS, sample].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "数据导入模板.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("模板已下载");
+  }
+
+  // 打开导入对话框
+  async function openImport() {
+    // 预加载已发布内容，用于按标题匹配 content_id
+    let published = [];
+    try {
+      published = await window.Db.list("contents", {
+        select: "id, title",
+        eq: { status: "published" },
+        order: { col: "updated_at", ascending: false },
+        limit: 500,
+      });
+    } catch (e) { }
+
+    const titleToId = {};
+    published.forEach(c => { if (c.title) titleToId[c.title.trim()] = c.id; });
+
+    showModal(`
+      <div class="modal-head">
+        <h3>导入数据</h3>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <p class="text-xs muted" style="margin:0 0 12px; line-height:1.6;">
+        支持从「导出 CSV」导出的文件，或下载模板后填写。标题会尝试自动匹配已发布内容。<br/>
+        平台支持：小红书 / 抖音 / B站 / 公众号；爆款/踩坑填「是」或留空。
+      </p>
+      <div class="field">
+        <label class="field-label">选择 CSV 文件</label>
+        <input type="file" id="impFile" class="input" accept=".csv,.txt" />
+      </div>
+      <div id="impResult" class="mt-sm"></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取消</button>
+        <button class="btn btn-primary" id="btnDoImport" disabled>确认导入</button>
+      </div>
+    `);
+
+    // 保存解析状态供确认导入使用
+    let parsedRecords = [];
+    let parseWarnings = [];
+
+    $("impFile").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      const box = $("impResult");
+      if (!file) { box.innerHTML = ""; return; }
+
+      const text = await file.text().catch(() => "");
+      const parsed = parseImportCsv(text);
+      parseWarnings = parsed.warnings;
+      parsedRecords = parsed.rows.map(r => ({ ...r, content_id: r.title && titleToId[r.title.trim()] ? titleToId[r.title.trim()] : null }));
+
+      const ok = parsedRecords.filter(r => !r._skip);
+      const btn = $("btnDoImport");
+      if (ok.length === 0) {
+        box.innerHTML = `<div class="text-danger text-sm">未解析到有效数据行${parseWarnings.length ? `（${parseWarnings.length} 处标记）` : ""}</div>`;
+        btn.disabled = true;
+        return;
+      }
+      btn.disabled = false;
+      box.innerHTML = `
+        <div class="text-sm" style="margin-bottom:8px;">
+          已解析 <b>${ok.length}</b> 条有效记录
+          ${parseWarnings.length ? `，<span class="text-warn">${parseWarnings.length} 处跳过</span>` : ""}
+        </div>
+        <div class="card" style="max-height:220px; overflow:auto; padding:8px 12px;">
+          <table class="data-table">
+            <thead><tr><th>标题</th><th>平台</th><th>阅读</th><th>互动</th><th>匹配内容</th></tr></thead>
+            <tbody>
+              ${ok.slice(0, 30).map(r => `
+                <tr>
+                  <td>${escapeHtml((r.title || "").slice(0, 15))}</td>
+                  <td>${PLATFORMS[r.platform] || r.platform}</td>
+                  <td>${r.views}</td>
+                  <td>${(r.likes || 0) + (r.favorites || 0) + (r.comments || 0)}</td>
+                  <td>${r.content_id ? '<span class="tag ok">已匹配</span>' : '<span class="text-xs muted">未匹配</span>'}</td>
+                </tr>`).join("")}
+              ${ok.length > 30 ? `<tr><td colspan="5" class="text-xs muted">...等 ${ok.length} 条</td></tr>` : ""}
+            </tbody>
+          </table>
+        </div>
+      `;
+    });
+
+    $("btnDoImport").addEventListener("click", async () => {
+      const list = parsedRecords.filter(r => !r._skip);
+      if (list.length === 0) return;
+      const confirmed = await confirm(`确认导入 ${list.length} 条数据？导入后将立即生效。`);
+      if (!confirmed) return;
+      const btn = $("btnDoImport");
+      btn.disabled = true;
+      btn.textContent = "导入中...";
+      try {
+        // 需要显式写入 recorded_at；空标题行跳过
+        await window.Db.createMany("metrics", list.map(r => ({
+          content_id: r.content_id || null,
+          platform: r.platform,
+          views: r.views || 0,
+          likes: r.likes || 0,
+          favorites: r.favorites || 0,
+          comments: r.comments || 0,
+          shares: r.shares || 0,
+          followers_gained: r.followers_gained || 0,
+          is_viral: !!r.is_viral,
+          is_flop: !!r.is_flop,
+          review_notes: r.review_notes || "",
+          recorded_at: r.recorded_at || new Date().toISOString(),
+        })));
+        toast(`成功导入 ${list.length} 条数据`);
+        closeModal();
+        await loadData();
+      } catch (err) {
+        toast("导入失败: " + err.message);
+        btn.disabled = false;
+        btn.textContent = "确认导入";
+      }
+    });
+  }
+
+  // 简易 CSV 解析（支持引号、逗号、BOM、utf8 中文、分号分隔兜底）
+  function parseImportCsv(text) {
+    const warnings = [];
+    const rows = [];
+
+    let content = (text || "").replace(/^\uFEFF/, "").trim();
+    if (!content) { return { rows, warnings }; }
+
+    // 分隔符猜测：优先逗号，含分号无数逗号时用分号
+    let delimiter = ",";
+    const firstLine = content.split(/\r?\n/, 1)[0] || "";
+    if (!firstLine.includes(",") && firstLine.includes(";")) delimiter = ";";
+
+    const rawLines = content.split(/\r?\n/);
+    const records = [];
+    for (let li = 0; li < rawLines.length; li++) {
+      const line = rawLines[li];
+      const row = [];
+      let field = "";
+      let inQuote = false;
+      const chars = line.split("");
+      let i = 0;
+      while (i < chars.length) {
+        const ch = chars[i];
+        if (inQuote) {
+          if (ch === '"') {
+            if (chars[i + 1] === '"') { field += '"'; i += 2; continue; }
+            inQuote = false; i++; continue;
+          }
+          field += ch; i++; continue;
+        }
+        if (ch === '"') { inQuote = true; i++; continue; }       // 字段以引号开头
+        else if (ch === delimiter) { row.push(field); field = ""; i++; continue; }
+        field += ch; i++;
+      }
+      row.push(field); // 行尾提交最后一个字段
+      if (!inQuote) {
+        if (row.some(c => (c || "").trim() !== "")) records.push(row);
+      } else {
+        // 跨行引号字段：合并到上一行记录
+        if (records.length === 0) records.push([]);
+        const last = records[records.length - 1];
+        if (last.length === 0) last.push(field);
+        else last[last.length - 1] += "\n" + field;
+      }
+    }
+    if (records.length === 0) return { rows, warnings };
+
+    // 表头解析（规范化匹配列）
+    const headerMap = {};
+    records[0].forEach((h, idx) => {
+      const key = (h || "").trim().toLowerCase().replace(/[\s_-\uFF1A:：]/g, "");
+      if (key.includes("标题")) headerMap.title = idx;
+      else if (key.includes("平台")) headerMap.platform = idx;
+      else if (key.includes("阅读")) headerMap.views = idx;
+      else if (key.includes("点赞")) headerMap.likes = idx;
+      else if (key.includes("收藏")) headerMap.favorites = idx;
+      else if (key.includes("评论")) headerMap.comments = idx;
+      else if (key.includes("转发")) headerMap.shares = idx;
+      else if (key.includes("涨粉")) headerMap.followers = idx;
+      else if (key.includes("爆款")) headerMap.viral = idx;
+      else if (key.includes("踩坑")) headerMap.flop = idx;
+      else if (key.includes("复盘") || key.includes("笔记")) headerMap.notes = idx;
+      else if (key.includes("记录") && key.includes("时间")) headerMap.date = idx;
+      // 兼容英文表头
+      else if (key === "title" || key === "内容") headerMap.title = idx;
+      else if (key === "platform") headerMap.platform = idx;
+      else if (key === "views") headerMap.views = idx;
+      else if (key === "likes") headerMap.likes = idx;
+      else if (key === "favorites") headerMap.favorites = idx;
+      else if (key === "comments") headerMap.comments = idx;
+      else if (key === "shares") headerMap.shares = idx;
+      else if (key === "followers" || key === "followersgained" || key === "涨粉数") headerMap.followers = idx;
+      else if (key === "viral" || key === "isviral" || key === "爆款") headerMap.viral = idx;
+      else if (key === "flop" || key === "isflop") headerMap.flop = idx;
+      else if (key === "notes" || key === "reviewnotes") headerMap.notes = idx;
+      else if (key === "date" || key === "recordedat" || key === "记录时间") headerMap.date = idx;
+    });
+
+    const cell = (row, key) => (key !== undefined && row[key] !== undefined) ? String(row[key]).trim() : "";
+
+    for (let r = 1; r < records.length; r++) {
+      const row = records[r];
+      const rec = {
+        title: cell(row, headerMap.title),
+        platform: mapPlatform(cell(row, headerMap.platform)),
+        views: parseNum(cell(row, headerMap.views)),
+        likes: parseNum(cell(row, headerMap.likes)),
+        favorites: parseNum(cell(row, headerMap.favorites)),
+        comments: parseNum(cell(row, headerMap.comments)),
+        shares: parseNum(cell(row, headerMap.shares)),
+        followers_gained: parseNum(cell(row, headerMap.followers)),
+        is_viral: parseBool(cell(row, headerMap.viral)),
+        is_flop: parseBool(cell(row, headerMap.flop)),
+        review_notes: cell(row, headerMap.notes),
+        recorded_at: parseDate(cell(row, headerMap.date)),
+        _skip: false,
+      };
+      // 跳过完全空行
+      if (!rec.title && !rec.views && !rec.likes) { rec._skip = true; continue; }
+      // 平台校验（缺失时跳过并标记）
+      if (!rec.platform) { rec._skip = true; warnings.push(`第 ${r + 1} 行：平台无效或缺失`); continue; }
+      rows.push(rec);
+    }
+
+    return { rows, warnings };
+  }
+
+  // 平台别名 → 标准 key
+  function mapPlatform(p) {
+    const s = (p || "").trim().toLowerCase();
+    const map = {
+      xhs: "xhs", 小红书: "xhs", rednote: "xhs",
+      douyin: "douyin", 抖音: "douyin", tiktok: "douyin",
+      bilibili: "bilibili", b站: "bilibili", bzhan: "bilibili", 哔哩哔哩: "bilibili",
+      wechat: "wechat", 公众号: "wechat", 微信: "wechat", weixin: "wechat",
+    };
+    return map[s] || null;
+  }
+
+  // 数字解析（去逗号、非数字）
+  function parseNum(v) {
+    const n = parseInt(String(v || "").replace(/[^\d-]/g, ""), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // 布尔解析：是/否、true/false、1/0
+  function parseBool(v) {
+    const s = String(v || "").trim().toLowerCase();
+    return s === "是" || s === "y" || s === "true" || s === "1" || s === "有";
+  }
+
+  // 日期解析：YYYY-MM-DD 或 YYYY-MM-DD HH:mm，空则返回 null（用当前时间）
+  function parseDate(v) {
+    const s = String(v || "").trim();
+    if (!s) return null;
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
   }
 
   return { render };

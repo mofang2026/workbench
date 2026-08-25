@@ -1,7 +1,7 @@
 /**
  * 内容创作中心 · 一稿多平台
  * - 通用原稿区（标题/正文/大纲/观点）
- * - 四平台独立适配面板（小红书/抖音/B站/公众号）
+ * - 八大平台独立适配面板（小红书/抖音/B站/公众号）
  * - AI 跨平台一键改写
  * - AI 内容打分 + 质检清单
  */
@@ -36,6 +36,34 @@ const ContentEditor = (function () {
       fieldLabels: { title: "标题", body: "正文", subtitle: "小标题优化", ending: "首尾引导", original_decl: "原创声明", cover_text: "封面图配置" },
       rewritePrompt: "改写为公众号风格：标题有信息量、正文长文排版、小标题层次清晰、首尾引导关注、原创声明规范、封面图配置说明。",
     },
+    shipinhao: {
+      name: "视频号",
+      charLimit: 1500,
+      fields: ["title", "body", "shot_split", "duration", "hot_words"],
+      fieldLabels: { title: "视频标题", body: "口播文案", shot_split: "镜头拆分", duration: "时长配置", hot_words: "话题热词" },
+      rewritePrompt: "改写为视频号风格：接地气口语化、开头3秒抓眼球、镜头拆分清晰、时长合理、配合正能量话题热词3-5个。",
+    },
+    kuaishou: {
+      name: "快手",
+      charLimit: 1500,
+      fields: ["title", "body", "shot_split", "duration", "cover_text"],
+      fieldLabels: { title: "视频标题", body: "口播文案", shot_split: "镜头拆分", duration: "时长配置", cover_text: "封面文案" },
+      rewritePrompt: "改写为快手风格：老铁口语化、真实感强、开头冲突前置、镜头拆分接地气、封面文案吸睛。",
+    },
+    weibo: {
+      name: "微博",
+      charLimit: 2000,
+      fields: ["title", "body", "tags", "at_list", "summary"],
+      fieldLabels: { title: "博文标题", body: "博文正文", tags: "话题标签", at_list: "@提及", summary: "导语摘要" },
+      rewritePrompt: "改写为微博风格：简洁犀利有观点、开头抓热点、用2-3个#话题#、引导转发评论、@相关账号。",
+    },
+    toutiao: {
+      name: "今日头条",
+      charLimit: 3000,
+      fields: ["title", "body", "subtitle", "summary", "cover_text"],
+      fieldLabels: { title: "标题", body: "正文", subtitle: "小标题优化", summary: "摘要", cover_text: "封面图配置" },
+      rewritePrompt: "改写为今日头条风格：标题说清楚价值、正文信息密度高、小标题分层、摘要概括核心点、符合头条推荐机制。",
+    },
   };
 
   const STATUS_FLOW = [
@@ -56,7 +84,7 @@ const ContentEditor = (function () {
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">CONTENT · 内容创作中心</p>
         <h1>内容创作中心</h1>
-        <p class="sub">一次原稿，四平台智能适配 · <span class="ai-badge">AI 辅助</span></p>
+        <p class="sub">一次原稿，八大平台智能适配 · <span class="ai-badge">AI 辅助</span></p>
       </div>
 
       <div class="card">
@@ -89,6 +117,14 @@ const ContentEditor = (function () {
         </div>
         <div id="contentList"></div>
       </div>
+
+      <!-- 合并：选题灵感库 -->
+      <h3 class="section-title mt-lg">选题灵感库</h3>
+      <div id="contentTopics"></div>
+
+      <!-- 合并：关键词库 -->
+      <h3 class="section-title mt-lg">关键词库</h3>
+      <div id="contentKeywords"></div>
     `;
 
     $("contentSearch").addEventListener("input", () => loadList());
@@ -102,6 +138,10 @@ const ContentEditor = (function () {
     $("btnBatchClear").addEventListener("click", clearSelection);
 
     await loadList();
+
+    // 合并渲染：选题灵感库 + 关键词库（内容页编辑器下方）
+    if (window.Topics) await window.Topics.render({ wrapper: $("contentTopics"), noHero: true });
+    if (window.Keywords) await window.Keywords.render({ wrapper: $("contentKeywords"), noHero: true });
   }
 
   // U4 批量选择
@@ -349,7 +389,7 @@ const ContentEditor = (function () {
             <div class="col gap-sm">
               <button class="btn btn-warm" id="btnAiRewriteAll">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/></svg>
-                一键跨平台改写（四平台）
+                一键跨平台改写（八大平台）
               </button>
               <div class="grid grid-2">
                 <button class="btn btn-ghost btn-sm" id="btnAiTitle">优化标题</button>
@@ -370,7 +410,7 @@ const ContentEditor = (function () {
           </div>
         </div>
 
-        <!-- 右：四平台适配 + 评分 + 质检 -->
+        <!-- 右：八大平台适配 + 评分 + 质检 -->
         <div>
           <!-- 平台 Tab -->
           <div class="platform-tabs">
@@ -968,7 +1008,7 @@ ${bodyHtml}
     currentContent.adaptations = adaptations;
     hideAiOutput();
     renderAdaptPanel();
-    toast(`四平台改写完成（${successCount}/${entries.length} 成功）`);
+    toast(`八大平台改写完成（${successCount}/${entries.length} 成功）`);
   }
 
   async function aiRewriteOne(platform) {
@@ -1349,7 +1389,7 @@ ${bodyHtml}
             <tr>
               <td>${i === 0 ? '<span class="tag ok">冠军</span>' : i + 1}</td>
               <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.title)}</td>
-              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${{ xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号" }[r.platform]}</span></td>
+              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${{ xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" }[r.platform]}</span></td>
               <td>${r.views}</td>
               <td>${r.eng}</td>
               <td style="color:${parseFloat(r.engRate) >= 5 ? "var(--ok)" : parseFloat(r.engRate) >= 2 ? "var(--warn)" : "var(--muted)"};">${r.engRate}%</td>
@@ -1427,7 +1467,7 @@ ${bodyHtml}
 
   // ========== AI 违规自检（第二批） ==========
 
-  // 四平台差异化检测重点
+  // 八大平台差异化检测重点
   const COMPLIANCE_RULES = {
     xhs: {
       name: "小红书",
@@ -1445,19 +1485,35 @@ ${bodyHtml}
       name: "公众号",
       checks: ["标题是否含标题党/夸大宣传", "正文是否含未标注的广告", "是否涉及时政/金融等需资质内容", "是否含诱导分享/关注的话术", "原创声明是否合规"],
     },
+    shipinhao: {
+      name: "视频号",
+      checks: ["标题是否含夸张/极限词", "口播文案是否含诱导关注/导流", "是否涉及时政/医疗等需资质内容", "是否含搬运/版权争议内容", "话题标签是否含违禁词"],
+    },
+    kuaishou: {
+      name: "快手",
+      checks: ["口播文案是否含低俗/擦边球内容", "是否含未标注的广告/营销内容", "标题是否含夸大/虚构承诺", "是否含涉黄/暴力等违规内容", "视频描述是否涉及版权风险"],
+    },
+    weibo: {
+      name: "微博",
+      checks: ["博文是否含敏感时政内容", "是否含人身攻击/引战言论", "#话题#是否含违禁词", "是否含造谣/不实信息", "是否含未标注的广告植入"],
+    },
+    toutiao: {
+      name: "今日头条",
+      checks: ["标题是否含标题党/夸大宣传", "正文信息是否真实可查证", "是否涉及时政/金融等需资质内容", "是否含搬运/洗稿内容", "是否含诱导点击/误导性描述"],
+    },
   };
 
   async function aiComplianceCheck() {
     const body = readOriginal();
     if (!body.body) { toast("请先填写正文"); return; }
 
-    showAiOutput("AI 违规自检中（敏感词 + 四平台合规 + 限流风险）...");
+    showAiOutput("AI 违规自检中（敏感词 + 八大平台合规 + 限流风险）...");
     try {
-      // 构建四平台差异化检测指令
+      // 构建八大平台差异化检测指令
       const platformRules = Object.entries(COMPLIANCE_RULES)
         .map(([k, r]) => `${r.name}：${r.checks.join("；")}`).join("\n");
 
-      const prompt = `你是一位严格的内容合规审核专家，精通小红书、抖音、B站、公众号的平台规则。\n\n请对以下内容进行全面违规自检。\n\n标题：${body.title}\n正文：${body.body}\n\n四平台检测重点：\n${platformRules}\n\n请按以下 JSON 格式输出自检报告：\n${JSON.stringify({
+      const prompt = `你是一位严格的内容合规审核专家，精通小红书、抖音、B站、公众号、视频号、快手、微博、今日头条的平台规则。\n\n请对以下内容进行全面违规自检。\n\n标题：${body.title}\n正文：${body.body}\n\n八大平台检测重点：\n${platformRules}\n\n请按以下 JSON 格式输出自检报告：\n${JSON.stringify({
         overall_risk: "低/中/高",
         risk_score: 0,
         sensitive_words: [{ word: "敏感词", reason: "违规原因", severity: "高/中/低" }],
@@ -1466,6 +1522,10 @@ ${bodyHtml}
           douyin: { status: "通过/警告/违规", issues: ["问题1"] },
           bilibili: { status: "通过/警告/违规", issues: ["问题1"] },
           wechat: { status: "通过/警告/违规", issues: ["问题1"] },
+          shipinhao: { status: "通过/警告/违规", issues: ["问题1"] },
+          kuaishou: { status: "通过/警告/违规", issues: ["问题1"] },
+          weibo: { status: "通过/警告/违规", issues: ["问题1"] },
+          toutiao: { status: "通过/警告/违规", issues: ["问题1"] },
         },
         limit_risks: ["限流风险点1"],
         suggestions: ["修改建议1"],
@@ -1495,7 +1555,7 @@ ${bodyHtml}
 
   function renderComplianceReport(report) {
     const riskColor = report.overall_risk === "高" ? "var(--danger)" : report.overall_risk === "中" ? "var(--warn)" : "var(--ok)";
-    const platformIcons = { xhs: "📕", douyin: "🎵", bilibili: "📺", wechat: "💬" };
+    const platformIcons = { xhs: "📕", douyin: "🎵", bilibili: "📺", wechat: "💬", shipinhao: "▶️", kuaishou: "📱", weibo: "🧣", toutiao: "📰" };
 
     return `
       <div class="editor-section compliance-report">
@@ -1530,9 +1590,9 @@ ${bodyHtml}
           </div>
         ` : ""}
 
-        <!-- 四平台合规检测 -->
+        <!-- 八大平台合规检测 -->
         <div class="compliance-block">
-          <div class="compliance-block-title">四平台合规检测</div>
+          <div class="compliance-block-title">八大平台合规检测</div>
           <div class="platform-compliance-grid">
             ${Object.entries(COMPLIANCE_RULES).map(([k, r]) => {
               const result = report.platform_results?.[k] || {};

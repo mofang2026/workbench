@@ -38,6 +38,10 @@
   --douyin-accent: #25f4ee;
   --bilibili: #fb7299;  /* B站 */
   --wechat: #07c160;    /* 公众号 */
+  --shipinhao: #fa9d3b; /* 视频号 */
+  --kuaishou: #ff6900;  /* 快手 */
+  --weibo: #e6162d;     /* 微博 */
+  --toutiao: #f04142;   /* 今日头条 */
 
   /* 圆角 */
   --radius-sm: 10px;
@@ -267,6 +271,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .platform-card.douyin { border-top: 3px solid var(--douyin-accent); }
 .platform-card.bilibili { border-top: 3px solid var(--bilibili); }
 .platform-card.wechat { border-top: 3px solid var(--wechat); }
+.platform-card.shipinhao { border-top: 3px solid var(--shipinhao); }
+.platform-card.kuaishou { border-top: 3px solid var(--kuaishou); }
+.platform-card.weibo { border-top: 3px solid var(--weibo); }
+.platform-card.toutiao { border-top: 3px solid var(--toutiao); }
 
 .platform-head {
   display: flex;
@@ -694,6 +702,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .platform-tab.douyin.active { color: var(--douyin-accent); border-bottom-color: var(--douyin-accent); }
 .platform-tab.bilibili.active { color: var(--bilibili); border-bottom-color: var(--bilibili); }
 .platform-tab.wechat.active { color: var(--wechat); border-bottom-color: var(--wechat); }
+.platform-tab.shipinhao.active { color: var(--shipinhao); border-bottom-color: var(--shipinhao); }
+.platform-tab.kuaishou.active { color: var(--kuaishou); border-bottom-color: var(--kuaishou); }
+.platform-tab.weibo.active { color: var(--weibo); border-bottom-color: var(--weibo); }
+.platform-tab.toutiao.active { color: var(--toutiao); border-bottom-color: var(--toutiao); }
 
 /* ── 日历视图 ── */
 .calendar-grid {
@@ -747,6 +759,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .cal-item.douyin { border-color: var(--douyin-accent); }
 .cal-item.bilibili { border-color: var(--bilibili); }
 .cal-item.wechat { border-color: var(--wechat); }
+.cal-item.shipinhao { border-color: var(--shipinhao); }
+.cal-item.kuaishou { border-color: var(--kuaishou); }
+.cal-item.weibo { border-color: var(--weibo); }
+.cal-item.toutiao { border-color: var(--toutiao); }
 .cal-item:hover { background: var(--surface-strong); }
 /* U1 拖拽 */
 .cal-item-draggable { cursor: grab; }

@@ -127,6 +127,10 @@ const VideoScript = (function () {
             <option value="小红书">小红书</option>
             <option value="B站">B站</option>
             <option value="公众号">公众号</option>
+            <option value="视频号">视频号</option>
+            <option value="快手">快手</option>
+            <option value="微博">微博</option>
+            <option value="今日头条">今日头条</option>
           </select>
         </div>
       </div>

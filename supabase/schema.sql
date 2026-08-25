@@ -245,10 +245,18 @@ alter table public.platform_rules enable row level security;
 alter table public.qa_checklist_templates enable row level security;
 
 -- profiles: 本人可读写
+drop policy if exists "profiles_self_read" on public.profiles;
+drop policy if exists "profiles_self_update" on public.profiles;
 create policy "profiles_self_read" on public.profiles for select using (auth.uid() = id);
 create policy "profiles_self_update" on public.profiles for update using (auth.uid() = id);
 
 -- 通用 RLS 模板：用户表
+drop policy if exists "accounts_owner_all" on public.accounts;
+drop policy if exists "topics_owner_all" on public.topics;
+drop policy if exists "contents_owner_all" on public.contents;
+drop policy if exists "schedules_owner_all" on public.schedules;
+drop policy if exists "assets_owner_all" on public.assets;
+drop policy if exists "metrics_owner_all" on public.metrics;
 create policy "accounts_owner_all" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "topics_owner_all" on public.topics for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "contents_owner_all" on public.contents for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -257,10 +265,14 @@ create policy "assets_owner_all" on public.assets for all using (auth.uid() = us
 create policy "metrics_owner_all" on public.metrics for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- templates: 本人私有 + 系统内置所有人可读
+drop policy if exists "templates_read" on public.templates;
+drop policy if exists "templates_owner_write" on public.templates;
 create policy "templates_read" on public.templates for select using (is_builtin = true or user_id = auth.uid());
 create policy "templates_owner_write" on public.templates for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- 公共表：所有登录用户可读（platform_rules / qa_checklist_templates）
+drop policy if exists "rules_read" on public.platform_rules;
+drop policy if exists "qa_templates_read" on public.qa_checklist_templates;
 create policy "rules_read" on public.platform_rules for select to authenticated using (true);
 create policy "qa_templates_read" on public.qa_checklist_templates for select to authenticated using (true);
 
@@ -282,6 +294,51 @@ begin
   loop
     execute format('drop trigger if exists trg_%s_touch on public.%s;', t, t);
     execute format('create trigger trg_%s_touch before update on public.%s for each row execute function public.touch_updated_at();', t, t);
+  end loop;
+end$$;
+
+-- ============================================================================
+-- 平台扩展迁移：新增 视频号(shipinhao)/快手(kuaishou)/微博(weibo)/今日头条(toutiao)
+-- 动态删除旧的 platform CHECK 约束并重建为含新平台的版本（自包含，可重复执行）
+-- ============================================================================
+do $$
+declare
+  r record;
+  col text;
+  tilist text := null;
+  allowlist text[] := array['xhs','douyin','bilibili','wechat','shipinhao','kuaishou','weibo','toutiao','all'];
+begin
+  -- 目标平台清单（所有表统一），含全平台 'all'，每项带单引号
+  tilist := '''xhs'',''douyin'',''bilibili'',''wechat'',''shipinhao'',''kuaishou'',''weibo'',''toutiao'',''all''';
+
+  for r in
+    select c.table_name, c.column_name, tc.constraint_name
+    from information_schema.table_constraints tc
+    join information_schema.constraint_column_usage ccu
+      on ccu.constraint_name = tc.constraint_name
+      and ccu.table_schema = tc.table_schema
+    join information_schema.columns c
+      on c.table_schema = tc.table_schema
+      and c.table_name = tc.table_name
+      and c.column_name = ccu.column_name
+    where tc.constraint_type = 'CHECK'
+      and tc.table_schema = 'public'
+      and c.column_name = 'platform'
+      and tc.table_name in
+        ('accounts','topics','contents','schedules','assets','metrics','templates','platform_rules','keywords','qa_checklist_templates')
+  loop
+    begin
+      execute format('alter table public.%I drop constraint %I;', r.table_name, r.constraint_name);
+    exception when others then end;
+    -- 加约束前将残留的非法平台值归并为 'all'，避免约束被存量数据拒绝
+    execute format(
+      'update public.%I set %I = %L where %I is not null and not (%I = any(%L));',
+      r.table_name, r.column_name, 'all', r.column_name, r.column_name, allowlist
+    );
+    execute format(
+      'alter table public.%I add constraint %I check (platform in (%s));',
+      r.table_name, 'platform_check_' || r.table_name, tilist
+    );
   end loop;
 end$$;
 

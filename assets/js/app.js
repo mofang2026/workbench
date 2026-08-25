@@ -13,6 +13,10 @@ const PLATFORM_META = {
   douyin:   { name: "抖音",     color: "douyin",   url: "https://creator.douyin.com" },
   bilibili: { name: "B站",      color: "bilibili", url: "https://member.bilibili.com" },
   wechat:   { name: "公众号",   color: "wechat",   url: "https://mp.weixin.qq.com" },
+  shipinhao:{ name: "视频号",   color: "shipinhao",url: "https://channels.weixin.qq.com/platform/post/create" },
+  kuaishou: { name: "快手",     color: "kuaishou", url: "https://cp.kuaishou.com/article/publish" },
+  weibo:    { name: "微博",     color: "weibo",    url: "https://weibo.com/compose/newwrite" },
+  toutiao:  { name: "今日头条", color: "toutiao",  url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
 };
 
 // ========== Toast ==========
@@ -144,6 +148,9 @@ async function enterApp(user) {
   $("greeting").textContent = `${greeting}，${user.email.split("@")[0]}`;
 
   await renderDashboard();
+
+  // 启动定时提醒（发布到期 / 逾期未发布），若已配置
+  if (window.Reminders) window.Reminders.start();
 }
 
 // ========== 仪表盘渲染 ==========
@@ -393,12 +400,8 @@ async function switchPage(pageName) {
 
   // 模块懒加载渲染
   try {
-    if (pageName === "topics" && window.Topics) {
-      await window.Topics.render();
-    } else if (pageName === "hot-radar" && window.HotRadar) {
+    if (pageName === "hot-radar" && window.HotRadar) {
       await window.HotRadar.render();
-    } else if (pageName === "keywords" && window.Keywords) {
-      await window.Keywords.render();
     } else if (pageName === "content" && window.ContentEditor) {
       await window.ContentEditor.render();
     } else if (pageName === "calendar" && window.Calendar) {
@@ -435,8 +438,7 @@ function initQuickActions() {
       const action = el.dataset.action;
       switch (action) {
         case "new-topic":
-          await switchPage("topics");
-          // G10 修复：switchPage 已 await 完成，直接调用而非 setTimeout
+          await switchPage("content");
           $("btnNewTopic")?.click();
           break;
         case "new-content":

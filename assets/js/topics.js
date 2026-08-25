@@ -15,7 +15,7 @@ const Topics = (function () {
   ];
 
   const PLATFORM_LABELS = {
-    xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", all: "全域",
+    xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "全域",
   };
 
   let listData = [];
@@ -24,15 +24,16 @@ const Topics = (function () {
   let filterHot = false;
   let searchKw = "";
 
-  async function render() {
-    const wrap = $("page-topics");
-    wrap.innerHTML = `
+  async function render(opts) {
+    opts = opts || {};
+    const wrap = opts.wrapper || $("page-topics");
+    const hero = opts.noHero ? "" : `
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">TOPICS · 选题灵感库</p>
         <h1>选题灵感库</h1>
         <p class="sub">灵感收录 · 状态流转 · 爆款选题 · 关键词管理</p>
-      </div>
-
+      </div>`;
+    wrap.innerHTML = hero + `
       <div class="card">
         <div class="toolbar">
           <input id="topicSearch" class="input" placeholder="搜索标题/关键词..." style="flex:1; min-width:200px;" />

@@ -12,6 +12,10 @@ const Calendar = (function () {
     douyin: { name: "抖音", url: "https://creator.douyin.com/creator-micro/content/upload" },
     bilibili: { name: "B站", url: "https://member.bilibili.com/platform/upload/text/edit" },
     wechat: { name: "公众号", url: "https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=add&type=10" },
+    shipinhao: { name: "视频号", url: "https://channels.weixin.qq.com/platform/post/create" },
+    kuaishou: { name: "快手", url: "https://cp.kuaishou.com/article/publish" },
+    weibo: { name: "微博", url: "https://weibo.com/compose/newwrite" },
+    toutiao: { name: "今日头条", url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
   };
 
   const WEEK_HEADS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -51,6 +55,39 @@ const Calendar = (function () {
         { key: "is_original", label: "原创声明", type: "checkbox", default: true },
         { key: "allow_repost", label: "允许转载", type: "checkbox", default: false },
         { key: "top_position", label: "首条位置", type: "checkbox", default: false, hint: "是否群发首条" },
+      ],
+    },
+    shipinhao: {
+      fields: [
+        { key: "duration", label: "视频时长", type: "text", default: "60s", hint: "如 15s/60s/3min" },
+        { key: "cover_ratio", label: "封面比例", type: "select", default: "16:9", options: ["16:9", "1:1", "4:3"] },
+        { key: "visible", label: "可见范围", type: "select", default: "公开", options: ["公开", "仅粉丝", "仅自己"] },
+        { key: "photo", label: "同步图片", type: "checkbox", default: false, hint: "是否同步发图片动态" },
+      ],
+    },
+    kuaishou: {
+      fields: [
+        { key: "duration", label: "视频时长", type: "text", default: "60s", hint: "如 15s/60s/3min" },
+        { key: "cover_frame", label: "封面帧", type: "text", default: "00:03", hint: "截取时间点" },
+        { key: "is_original", label: "原创声明", type: "checkbox", default: true },
+        { key: "allow_download", label: "允许下载", type: "checkbox", default: true },
+        { key: "horizontal", label: "横屏视频", type: "checkbox", default: false },
+      ],
+    },
+    weibo: {
+      fields: [
+        { key: "topic_count", label: "话题数", type: "number", default: 2, hint: "建议 1-3 个话题" },
+        { key: "image_count", label: "配图数", type: "number", default: 1 },
+        { key: "at_count", label: "@提及数", type: "number", default: 0 },
+        { key: "comment_privacy", label: "评论限制", type: "select", default: "所有人", options: ["所有人", "仅粉丝", "仅自己"] },
+      ],
+    },
+    toutiao: {
+      fields: [
+        { key: "category", label: "领域分类", type: "select", default: "科技", options: ["科技", "财经", "社会", "娱乐", "体育", "健康", "教育", "三农"] },
+        { key: "abstract", label: "摘要字数", type: "number", default: 100, hint: "建议 60-120 字" },
+        { key: "is_original", label: "原创声明", type: "checkbox", default: true },
+        { key: "auto_publish", label: "定时发布", type: "checkbox", default: false },
       ],
     },
   };
@@ -111,7 +148,36 @@ const Calendar = (function () {
   let viewDate = new Date(); // 当前查看的月份
   let schedulesData = [];
   let contentsCache = {};
+  let accountsCache = [];
   let calViewMode = "month"; // month | week
+
+  // 加载当前用户的平台账号（多账号矩阵）
+  async function loadAccounts() {
+    try {
+      accountsCache = await window.Db.list("accounts", {
+        select: "id, platform, account_name, account_id, group_name",
+        order: { col: "platform", ascending: true },
+      });
+    } catch (e) {
+      accountsCache = [];
+    }
+  }
+
+  // 生成「选择账号」下拉 option（可按平台过滤）
+  function accountOptions(platform, currentId) {
+    const filtered = accountsCache.filter(a => !platform || a.platform === platform);
+    if (filtered.length === 0) {
+      return `<option value="">未登记账号（先去设置页登记）</option>`;
+    }
+    return [
+      `<option value="" ${currentId ? "" : "selected"}>不指定账号</option>`,
+      ...filtered.map(a => `
+        <option value="${a.id}" ${currentId === a.id ? "selected" : ""}>
+          ${a.platform ? (PLATFORMS[a.platform]?.name || a.platform) + " · " : ""}${a.account_name}${a.group_name ? `（${a.group_name}）` : ""}
+        </option>
+      `),
+    ].join("");
+  }
 
   async function render() {
     const wrap = $("page-calendar");
@@ -169,7 +235,7 @@ const Calendar = (function () {
     $("calViewMonth").addEventListener("click", () => { calViewMode = "month"; loadSchedules(); });
     $("calViewWeek").addEventListener("click", () => { calViewMode = "week"; loadSchedules(); });
 
-    await loadSchedules();
+    await Promise.all([loadAccounts(), loadSchedules()]);
   }
 
   function changePeriod(delta) {
@@ -577,6 +643,11 @@ const Calendar = (function () {
         </div>
       </div>
       <div class="field">
+        <label class="field-label">发布账号 <span class="text-xs muted">（多账号矩阵 · 可留空）</span></label>
+        <select id="sAccount" class="select">${accountOptions("", "")}</select>
+        <p class="text-xs muted-2 mt-sm">账号会随平台过滤，仅显示对应平台的账号；未登记请先到「设置 → 平台账号管理」新增</p>
+      </div>
+      <div class="field">
         <label class="field-label">备注</label>
         <input id="sRemark" class="input" placeholder="发布注意事项..." />
       </div>
@@ -594,6 +665,8 @@ const Calendar = (function () {
     // U12：平台切换时重渲染发布参数
     $("sPlatform").addEventListener("change", (e) => {
       $("publishParamsBox").innerHTML = renderParamsFields(e.target.value, defaultParamsFor(e.target.value));
+      // 账号随平台过滤
+      $("sAccount").innerHTML = accountOptions(e.target.value, "");
     });
 
     $("btnSaveSchedule").addEventListener("click", saveSchedule);
@@ -606,13 +679,14 @@ const Calendar = (function () {
     const contentTitle = contentsCache[s.content_id] || "未关联内容";
     const isPublished = !!s.actual_published_at;
     const platformMeta = PLATFORMS[s.platform];
+    const account = accountsCache.find(a => a.id === s.account_id);
     // U12：合并已保存的发布参数与默认值（缺失字段补默认）
     const savedParams = s.publish_params || {};
     const mergedParams = { ...defaultParamsFor(s.platform), ...savedParams };
 
     showModal(`
       <div class="modal-head">
-        <h3>排期详情</h3>
+        <h3>${isPublished ? "排期详情" : "发布排期"}</h3>
         <button class="modal-close" data-close>×</button>
       </div>
       <div class="list-item">
@@ -622,6 +696,10 @@ const Calendar = (function () {
           <span>· 计划 ${formatDateTime(s.scheduled_at)}</span>
           ${isPublished ? `<span class="tag ok">已发布</span>` : `<span class="tag warn">待发布</span>`}
         </div>
+      </div>
+      <div class="field">
+        <label class="field-label">发布账号</label>
+        <select id="sAccount" class="select">${accountOptions(s.platform, s.account_id || "")}</select>
       </div>
       <div class="field">
         <label class="field-label">计划发布时间</label>
@@ -636,9 +714,14 @@ const Calendar = (function () {
         <label class="field-label">发布参数 <span class="text-xs muted">（${platformMeta?.name || s.platform} 预设）</span></label>
         <div id="publishParamsBox">${renderParamsFields(s.platform, mergedParams)}</div>
       </div>
+      ${!isPublished ? `
+        <div class="callout callout-info" style="margin:0 0 12px;">
+          <strong>发布预填</strong>：点击「前往发布」后，标题与正文会自动复制到剪贴板，并打开平台发布页，直接粘贴即可。
+        </div>
+      ` : ""}
       <div class="modal-foot">
         <button class="btn btn-ghost" id="btnDeleteSchedule" style="margin-right:auto;">删除</button>
-        ${!isPublished ? `<button class="btn btn-primary" id="btnPublish">前往发布 →</button>` : `<button class="btn btn-ghost" id="btnUnpublish">取消已发布标记</button>`}
+        ${!isPublished ? `<button class="btn btn-primary" id="btnPublish">复制并前往发布 →</button>` : `<button class="btn btn-ghost" id="btnUnpublish">取消已发布标记</button>`}
         <button class="btn btn-primary" id="btnUpdateSchedule">保存</button>
       </div>
     `);
@@ -648,11 +731,46 @@ const Calendar = (function () {
     if (isPublished) {
       $("btnUnpublish").addEventListener("click", () => markPublish(s.id, false));
     } else {
-      $("btnPublish").addEventListener("click", () => {
-        // 跳转平台 + 标记
+      $("btnPublish").addEventListener("click", async () => {
+        // 发布预填增强：复制标题正文 + 打开平台发布页 + 标记已发布
+        await copyContentForPublish(s);
         window.open(platformMeta?.url || "#", "_blank");
         markPublish(s.id, true);
       });
+    }
+  }
+
+  // 发布预填：读取内容标题+正文，复制到剪贴板
+  async function copyContentForPublish(s) {
+    try {
+      let title = contentsCache[s.content_id] || "";
+      let body = "";
+      if (s.content_id) {
+        const c = await window.Db.get("contents", s.content_id, { select: "title, body, title, adaptations" });
+        if (c) {
+          title = c.title || title;
+          // 优先用平台适配正文，否则用原稿
+          const adapt = c.adaptations && c.adaptations[s.platform];
+          body = (adapt && (adapt.body || adapt.summary)) || c.body || "";
+        }
+      }
+      const text = (title ? title + "\n\n" : "") + body;
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text.trim());
+      } else {
+        // 降级：隐藏 textarea 复制
+        const ta = document.createElement("textarea");
+        ta.value = text.trim();
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast(`已复制标题${body ? "+正文" : ""}，去平台粘贴发布`);
+    } catch (e) {
+      toast("复制失败，请手动复制" + (e.message ? ": " + e.message : ""));
     }
   }
 
@@ -1063,6 +1181,7 @@ const Calendar = (function () {
   async function saveSchedule() {
     const contentId = $("sContent").value;
     const platform = $("sPlatform").value;
+    const accountId = $("sAccount") ? $("sAccount").value : "";
     const timeStr = $("sTime").value;
     const remark = $("sRemark").value.trim();
 
@@ -1073,6 +1192,7 @@ const Calendar = (function () {
     try {
       await window.Db.create("schedules", {
         content_id: contentId,
+        account_id: accountId || null,
         platform,
         scheduled_at: new Date(timeStr).toISOString(),
         publish_url: PLATFORMS[platform]?.url || "",
@@ -1092,9 +1212,11 @@ const Calendar = (function () {
     const platform = s?.platform || "xhs";
     const timeStr = $("sTime").value;
     const remark = $("sRemark").value.trim();
+    const accountId = $("sAccount") ? $("sAccount").value : "";
     try {
       await window.Db.update("schedules", id, {
         scheduled_at: new Date(timeStr).toISOString(),
+        account_id: accountId || null,
         publish_params: readParamsFromForm(platform),
         remark,
       });

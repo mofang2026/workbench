@@ -11,6 +11,10 @@ const Settings = (function () {
     douyin: { name: "抖音", url: "https://creator.douyin.com" },
     bilibili: { name: "B站", url: "https://member.bilibili.com" },
     wechat: { name: "公众号", url: "https://mp.weixin.qq.com" },
+    shipinhao: { name: "视频号", url: "https://channels.weixin.qq.com/platform/post/create" },
+    kuaishou: { name: "快手", url: "https://cp.kuaishou.com/article/publish" },
+    weibo: { name: "微博", url: "https://weibo.com/compose/newwrite" },
+    toutiao: { name: "今日头条", url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
   };
 
   let accountsCache = [];
@@ -52,6 +56,9 @@ const Settings = (function () {
         <div id="exportStatus" class="text-xs muted mt-md"></div>
       </div>
 
+      <!-- 提醒推送 -->
+      <div class="card mb-lg" id="reminderSettingsCard"></div>
+
       <!-- 系统配置 -->
       <div class="card">
         <div class="card-title"><span>系统配置</span></div>
@@ -61,6 +68,7 @@ const Settings = (function () {
 
     renderAiConfig();
     await renderAccounts();
+    if (window.Reminders) window.Reminders.renderSettingsPanel($("reminderSettingsCard"));
     renderSystemConfig();
 
     $("btnNewAccount").addEventListener("click", () => openAccountEditor(null));

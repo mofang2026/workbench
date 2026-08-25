@@ -120,6 +120,19 @@ const Db = (function () {
   }
 
   /**
+   * 批量新增（自动注入 user_id，一次请求写入多条）
+   */
+  async function createMany(table, rows) {
+    if (!rows || rows.length === 0) return [];
+    const c = client();
+    const userId = await uid();
+    const list = rows.map(row => ({ ...row, user_id: userId }));
+    const { data, error } = await c.from(table).insert(list).select();
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  /**
    * 批量更新（如修改状态）
    */
   async function updateMany(table, ids, payload) {
@@ -217,6 +230,7 @@ const Db = (function () {
     create,
     update,
     remove,
+    createMany,
     updateMany,
     getDashboardStats,
     getAlerts,

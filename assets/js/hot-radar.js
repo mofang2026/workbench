@@ -34,6 +34,10 @@ const HotRadar = (function () {
     { key: "douyin", label: "抖音" },
     { key: "bilibili", label: "B站" },
     { key: "wechat", label: "公众号" },
+    { key: "shipinhao", label: "视频号" },
+    { key: "kuaishou", label: "快手" },
+    { key: "weibo", label: "微博" },
+    { key: "toutiao", label: "今日头条" },
   ];
 
   let lastResults = []; // 最近一次 AI 分析结果（内存缓存，供收藏使用）

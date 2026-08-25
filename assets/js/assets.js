@@ -14,7 +14,7 @@ const Assets = (function () {
     quote: { name: "文案金句", icon: "✍️" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", all: "通用" };
+  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
 
   let cache = [];
   let filterType = "all";

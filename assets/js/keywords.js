@@ -21,7 +21,7 @@ const Keywords = (function () {
     deprecated: { label: "已废弃", cls: "archived" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", all: "通用" };
+  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
 
   let cache = [];
   let filterCategory = "all";
@@ -29,15 +29,16 @@ const Keywords = (function () {
   let filterStatus = "all";
   let searchKw = "";
 
-  async function render() {
-    const wrap = $("page-keywords");
-    wrap.innerHTML = `
+  async function render(opts) {
+    opts = opts || {};
+    const wrap = opts.wrapper || $("page-keywords");
+    const hero = opts.noHero ? "" : `
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">KEYWORDS · 关键词管理库</p>
         <h1>关键词管理库</h1>
         <p class="sub">分类管理 · 热度评分 · 选题聚合 · 批量导入</p>
-      </div>
-
+      </div>`;
+    wrap.innerHTML = hero + `
       <div class="card">
         <div class="toolbar">
           <input id="kwSearch" class="input" placeholder="搜索关键词..." style="flex:1; min-width:200px;" />

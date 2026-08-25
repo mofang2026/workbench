@@ -4,7 +4,7 @@
  */
 
 const Rules = (function () {
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号" };
+  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
   const CATEGORIES = ["封面", "标题", "标签", "敏感词", "排版", "时长", "字幕", "图片", "简介"];
   const RISK_COLORS = { info: "tag", warning: "tag warn", danger: "tag danger" };
   const RISK_LABELS = { info: "提示", warning: "警告", danger: "危险" };
@@ -20,7 +20,7 @@ const Rules = (function () {
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">RULES · 平台规则与质检</p>
         <h1>平台规则库</h1>
-        <p class="sub">四平台最新合规规则 · 质检清单模板</p>
+        <p class="sub">八大平台最新合规规则 · 质检清单模板</p>
       </div>
 
       <!-- 平台切换 -->
