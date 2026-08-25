@@ -2,11 +2,12 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "全域自媒体工作台",
   "version": "0.1.0",
-  "identifier": "com.workbench.app",
+  "identifier": "com.workbench.desktop",
   "build": {
-    "frontendDist": "..",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:4173",
-    "beforeDevCommand": "npm run dev"
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run tauri:sync"
   },
   "app": {
     "windows": [
@@ -27,16 +28,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
-    }
+    ]
   }
 }

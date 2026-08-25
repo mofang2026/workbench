@@ -8,7 +8,8 @@
     "vercel:dev": "vercel dev",
     "vercel:deploy": "vercel --prod",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:sync": "node sync-dist.js",
+    "tauri:build": "npm run tauri:sync && tauri build"
   },
   "engines": {
     "node": ">=18"

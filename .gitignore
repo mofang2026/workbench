@@ -10,3 +10,9 @@ node_modules
 # Tauri 编译产物
 src-tauri/target/
 src-tauri/gen/schemas/
+
+# Tauri 构建同步目录
+dist/
+
+# Playwright CLI 临时文件
+.playwright-cli/

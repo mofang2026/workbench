@@ -94,18 +94,30 @@ async function handleLogin() {
     // 先尝试登录
     let { data, error } = await c.auth.signInWithPassword({ email, password });
 
-    // 若用户不存在，自动注册
     if (error && error.message.toLowerCase().includes("invalid login")) {
+      // 登录失败 → 尝试注册新账号
       const reg = await c.auth.signUp({ email, password });
       if (reg.error) throw reg.error;
-      data = reg.data;
-      toast("账号已创建，已自动登录");
+
+      if (reg.data.session) {
+        // 注册成功且已自动登录（邮箱确认已关闭的情况）
+        data = reg.data;
+        toast("账号已创建，已自动登录");
+      } else if (reg.data.user) {
+        // 注册成功但需要邮箱确认
+        showAuthError("账号已创建！请前往邮箱点击确认链接，然后再回来登录");
+        return;
+      }
     } else if (error) {
       throw error;
     }
 
-    if (data.user) {
+    // 确保有有效 session 才进入应用
+    if (data.user && data.session) {
       await enterApp(data.user);
+    } else if (data.user) {
+      // 有 user 但无 session，可能 session 过期
+      showAuthError("登录会话异常，请重新输入邮箱密码登录");
     }
   } catch (e) {
     showAuthError(e.message || "登录失败");
