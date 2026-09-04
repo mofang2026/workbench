@@ -270,12 +270,12 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
         <p class="text-xs muted mt-xs">仅代理模式需要。服务端用 PROXY_API_SECRET 比对，防止接口被他人滥用消耗 AI 配额。</p>
       </div>
 
-      <!-- 代理模式哪些前端配置不生效的提示 -->
+      <!-- 代理模式说明 -->
       <div class="callout callout-info mb-md" id="aiProxyNoteWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
-        <strong>ℹ 代理模式说明</strong>：当前由服务端（Vercel 环境变量）统一决定供应商与故障转移顺序，<br />下方「主用提供商」「故障转移」「供应商配置」在前端不生效，仅供直连模式使用。
+        <strong>ℹ 代理模式说明</strong>：下方「主用提供商」「故障转移」「供应商配置」会生效。<br />各提供商的 <b>API Key 与 Base URL 由服务端（Vercel 环境变量）决定</b>，前端仅上传用户偏好（启用状态 / 顺序 / 模型），密钥不会泄露。
       </div>
 
-      <!-- 仅直连模式生效的供应商配置区 -->
+      <!-- 供应商配置区（直连：含 API Key/Base URL；代理：仅启停/顺序/模型生效） -->
       <div id="aiProviderSection">
       <!-- 故障转移开关 -->
       <div class="field">
@@ -391,11 +391,11 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
     const noteWrap = $("aiProxyNoteWrap");
     if (noteWrap) noteWrap.style.display = isProxy ? "" : "none";
 
-    // 代理模式下供应商/故障转移配置不生效：置灰并禁用交互
+    // 两种模式下供应商/故障转移配置均参与生成：直连用密钥、代理用偏好（启停/顺序/模型），不置灰
     const section = $("aiProviderSection");
     if (section) {
-      section.style.opacity = isProxy ? "0.4" : "1";
-      section.style.pointerEvents = isProxy ? "none" : "auto";
+      section.style.opacity = "1";
+      section.style.pointerEvents = "auto";
     }
   }
 

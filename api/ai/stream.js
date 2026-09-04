@@ -29,6 +29,48 @@ function authorize(req) {
   return { ok: true };
 }
 
+// 前端提供商 key（与 ai-gateway.js 的 PROVIDER_PRESETS 对齐，顺序即构建 env 映射依据）
+const PROVIDER_IDS = ["deepseek", "zhipu", "moonshot", "custom"];
+
+/**
+ * 按前端偏好解析最终提供商顺序（密钥始终取自服务端环境变量）
+ * @param {object} body 请求体（含 providerPrefs：activeProvider/order/failoverEnabled/providers）
+ */
+function resolveProviders(body) {
+  const envList = getProviders();
+  const envMap = {};
+  PROVIDER_IDS.forEach((id, i) => { if (envList[i]) envMap[id] = envList[i]; });
+
+  const prefs = body && body.providerPrefs;
+  if (!prefs || typeof prefs !== "object") {
+    return envList;
+  }
+
+  const order = Array.isArray(prefs.order) && prefs.order.length
+    ? prefs.order
+    : (typeof prefs.activeProvider === "string" && prefs.activeProvider
+        ? [prefs.activeProvider, ...PROVIDER_IDS.filter((k) => k !== prefs.activeProvider)]
+        : PROVIDER_IDS);
+
+  const failover = prefs.failoverEnabled !== false;
+
+  const result = [];
+  for (const id of order) {
+    const env = envMap[id];
+    if (!env) continue;
+    const pcfg = (prefs.providers && prefs.providers[id]) || null;
+    if (pcfg && pcfg.enabled === false) continue;
+    result.push({
+      ...env,
+      model: pcfg && pcfg.model ? pcfg.model : env.model,
+      reasonerModel: pcfg && pcfg.reasonerModel ? pcfg.reasonerModel : env.reasonerModel,
+    });
+  }
+
+  const final = result.length ? result : envList;
+  return failover ? final : final.slice(0, 1);
+}
+
 function getProviders() {
   const list = [];
   if (process.env.DEEPSEEK_API_KEY) {
@@ -120,7 +162,7 @@ module.exports = async (req, res) => {
   const { prompt, system = "", useReasoner = false, temperature, maxTokens } = body;
   if (!prompt) return sendJson(res, { error: "prompt required" }, 400);
 
-  const providers = getProviders();
+  const providers = resolveProviders(body);
   if (providers.length === 0) {
     return sendJson(res, { error: "服务端未配置任何 AI 提供商的环境变量" }, 500);
   }

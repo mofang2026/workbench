@@ -169,6 +169,31 @@ WB.define("AiGateway", [], () => {
   }
 
   /**
+   * 构建代理模式偏好（不含 API Key / BaseUrl，仅启停、顺序、模型）
+   * 服务端用其自身环境变量密钥，按此偏好决定主用/故障转移顺序、启停与模型。
+   */
+  function buildProxyPrefs() {
+    const s = getSettings();
+    const order = [s.activeProvider, ...DEFAULT_FAILOVER_ORDER.filter((k) => k !== s.activeProvider)];
+    const providers = {};
+    for (const k of DEFAULT_FAILOVER_ORDER) {
+      const p = s.providers[k];
+      if (!p) continue;
+      providers[k] = {
+        enabled: p.enabled !== false,
+        model: p.model || "",
+        reasonerModel: p.reasonerModel || "",
+      };
+    }
+    return {
+      activeProvider: s.activeProvider || "deepseek",
+      order,
+      failoverEnabled: s.failoverEnabled !== false,
+      providers,
+    };
+  }
+
+  /**
    * 代理模式调用
    */
   async function generateViaProxy(prompt, opts = {}) {
@@ -184,6 +209,7 @@ WB.define("AiGateway", [], () => {
         useReasoner: opts.useReasoner || false,
         temperature: opts.temperature,
         maxTokens: opts.maxTokens,
+        providerPrefs: buildProxyPrefs(),
       }),
     });
     if (!res.ok) {
@@ -265,6 +291,7 @@ WB.define("AiGateway", [], () => {
           useReasoner: opts.useReasoner || false,
           temperature: opts.temperature,
           maxTokens: opts.maxTokens,
+          providerPrefs: buildProxyPrefs(),
         }),
         signal,
       });
