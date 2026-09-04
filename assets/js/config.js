@@ -6,11 +6,27 @@
 WB.define("WorkbenchConfig", () => {
   const CFG_KEY = "workbench-config-v1";
 
+  // ===== 内置默认配置（共享 Supabase）=====
+  // 把本源应用的 Supabase URL + Anon Key 内置在这里，
+  // 朋友打开即用、无需手填。Anon Key 本就是可公开的匿名密钥，
+  // 数据安全靠「各自注册账号登录 + RLS 行级隔离」保证。
+  // 如需换共享库 / 在自己的项目上二次分发，改这里即可。
+  const BUILT_IN = {
+    supabaseUrl: "https://otyridsyurknrjnzloln.supabase.co",
+    supabaseAnonKey:
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXJpZHN5dXJrbnJqbnpsb2xuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2Mzg1MjksImV4cCI6MjEwMjIxNDUyOX0.aEiC8HmGCU62XZsX3pYe445uzrcRhLDvH65TE8R5EsU",
+  };
+
   function loadConfig() {
     try {
-      return JSON.parse(localStorage.getItem(CFG_KEY) || "{}");
+      const saved = JSON.parse(localStorage.getItem(CFG_KEY) || "{}");
+      // 用户从未填过（或清空）→ 回退到内置默认，保证开箱即用
+      if (!saved.supabaseUrl || !saved.supabaseAnonKey) {
+        return { ...BUILT_IN };
+      }
+      return saved;
     } catch {
-      return {};
+      return { ...BUILT_IN };
     }
   }
 

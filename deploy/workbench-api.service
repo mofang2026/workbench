@@ -1,0 +1,17 @@
+[Unit]
+Description=WorkBench AI Proxy API (zero-dep Node)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/workbench-api
+# 各 provider key + PROXY_API_SECRET 从此文件读取（服务端，chmod 600）
+EnvironmentFile=/opt/workbench-api/.env
+ExecStart=/usr/bin/env node /opt/workbench-api/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
