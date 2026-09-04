@@ -263,19 +263,26 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
         </div>
       </div>
 
+      <!-- 仅代理模式的密钥（与模式无关，始终生效） -->
+      <div class="field" id="aiProxySecretWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
+        <label class="field-label">代理接口密钥（X-Api-Key）</label>
+        <input id="aiProxySecret" class="input" type="password" value="${escapeAttr(s.proxySecret || "")}" placeholder="与 Vercel 环境变量 PROXY_API_SECRET 保持一致" autocomplete="off" />
+        <p class="text-xs muted mt-xs">仅代理模式需要。服务端用 PROXY_API_SECRET 比对，防止接口被他人滥用消耗 AI 配额。</p>
+      </div>
+
+      <!-- 代理模式哪些前端配置不生效的提示 -->
+      <div class="callout callout-info mb-md" id="aiProxyNoteWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
+        <strong>ℹ 代理模式说明</strong>：当前由服务端（Vercel 环境变量）统一决定供应商与故障转移顺序，<br />下方「主用提供商」「故障转移」「供应商配置」在前端不生效，仅供直连模式使用。
+      </div>
+
+      <!-- 仅直连模式生效的供应商配置区 -->
+      <div id="aiProviderSection">
       <!-- 故障转移开关 -->
       <div class="field">
         <label class="row gap-sm">
           <input type="checkbox" id="aiFailover" ${s.failoverEnabled !== false ? "checked" : ""} />
           <span class="text-sm">启用自动故障转移（主用失败时自动尝试备用提供商）</span>
         </label>
-      </div>
-
-      <!-- 代理模式密钥 -->
-      <div class="field" id="aiProxySecretWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
-        <label class="field-label">代理接口密钥（X-Api-Key）</label>
-        <input id="aiProxySecret" class="input" type="password" value="${escapeAttr(s.proxySecret || "")}" placeholder="与 Vercel 环境变量 PROXY_API_SECRET 保持一致" autocomplete="off" />
-        <p class="text-xs muted mt-xs">仅代理模式需要。服务端用 PROXY_API_SECRET 比对，防止接口被他人滥用消耗 AI 配额。</p>
       </div>
 
       <!-- 主用提供商选择 -->
@@ -291,6 +298,7 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
 
       <!-- 提供商列表 -->
       <div id="aiProvidersList"></div>
+      </div>
 
       <div class="row gap-sm mt-md" style="flex-wrap:wrap;">
         <button class="btn btn-primary" id="btnSaveAiConfig">保存配置</button>
@@ -376,11 +384,19 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
 
   function toggleAiModeHint() {
     const mode = document.querySelector('input[name="aiMode"]:checked')?.value;
-    const providerBlocks = document.querySelectorAll(".ai-provider-block");
-    const opacity = mode === "proxy" ? "0.5" : "1";
-    providerBlocks.forEach(b => b.style.opacity = opacity);
+    const isProxy = mode === "proxy";
+
     const secretWrap = $("aiProxySecretWrap");
-    if (secretWrap) secretWrap.style.display = mode === "proxy" ? "" : "none";
+    if (secretWrap) secretWrap.style.display = isProxy ? "" : "none";
+    const noteWrap = $("aiProxyNoteWrap");
+    if (noteWrap) noteWrap.style.display = isProxy ? "" : "none";
+
+    // 代理模式下供应商/故障转移配置不生效：置灰并禁用交互
+    const section = $("aiProviderSection");
+    if (section) {
+      section.style.opacity = isProxy ? "0.4" : "1";
+      section.style.pointerEvents = isProxy ? "none" : "auto";
+    }
   }
 
   function saveAiConfig() {

@@ -1956,3 +1956,22 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   line-height: 1.7;
   min-height: 60px;
 }
+
+/* ── Callout 提示框（通用） ── */
+.callout-info,
+.callout-warning {
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+.callout-info {
+  border-left: 3px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.06);
+}
+.callout-warning {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
