@@ -65,6 +65,7 @@ WB.define("AiGateway", [], () => {
           activeProvider: s.activeProvider || "deepseek",
           providers: s.providers,
           failoverEnabled: s.failoverEnabled !== false,
+          proxySecret: s.proxySecret || "",
         };
       }
       // 旧版 v1 迁移
@@ -92,6 +93,7 @@ WB.define("AiGateway", [], () => {
         activeProvider: "deepseek",
         providers,
         failoverEnabled: true,
+        proxySecret: "",
       };
     } catch {
       return getDefaultSettings();
@@ -104,6 +106,7 @@ WB.define("AiGateway", [], () => {
       activeProvider: "deepseek",
       providers: JSON.parse(JSON.stringify(PROVIDER_PRESETS)),
       failoverEnabled: true,
+      proxySecret: "",
     };
   }
 
@@ -169,9 +172,12 @@ WB.define("AiGateway", [], () => {
    * 代理模式调用
    */
   async function generateViaProxy(prompt, opts = {}) {
+    const s = getSettings();
+    const headers = { "Content-Type": "application/json" };
+    if (s.proxySecret) headers["X-Api-Key"] = s.proxySecret;
     const res = await fetch("/api/ai/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         prompt,
         system: opts.system || "",
@@ -247,9 +253,12 @@ WB.define("AiGateway", [], () => {
   async function streamViaProxy(prompt, opts = {}) {
     const { onChunk, onDone, onError, signal } = opts;
     try {
+      const s = getSettings();
+      const headers = { "Content-Type": "application/json" };
+      if (s.proxySecret) headers["X-Api-Key"] = s.proxySecret;
       const res = await fetch("/api/ai/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           prompt,
           system: opts.system || "",

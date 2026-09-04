@@ -271,6 +271,13 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
         </label>
       </div>
 
+      <!-- 代理模式密钥 -->
+      <div class="field" id="aiProxySecretWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
+        <label class="field-label">代理接口密钥（X-Api-Key）</label>
+        <input id="aiProxySecret" class="input" type="password" value="${escapeAttr(s.proxySecret || "")}" placeholder="与 Vercel 环境变量 PROXY_API_SECRET 保持一致" autocomplete="off" />
+        <p class="text-xs muted mt-xs">仅代理模式需要。服务端用 PROXY_API_SECRET 比对，防止接口被他人滥用消耗 AI 配额。</p>
+      </div>
+
       <!-- 主用提供商选择 -->
       <div class="field">
         <label class="field-label">主用提供商</label>
@@ -351,6 +358,8 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
     s.mode = document.querySelector('input[name="aiMode"]:checked')?.value || "direct";
     s.failoverEnabled = $("aiFailover").checked;
     s.activeProvider = $("aiActiveProvider").value;
+    const secretEl = $("aiProxySecret");
+    if (secretEl) s.proxySecret = secretEl.value.trim();
 
     document.querySelectorAll(".ai-provider-block").forEach(block => {
       const k = block.dataset.provider;
@@ -370,6 +379,8 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Remi
     const providerBlocks = document.querySelectorAll(".ai-provider-block");
     const opacity = mode === "proxy" ? "0.5" : "1";
     providerBlocks.forEach(b => b.style.opacity = opacity);
+    const secretWrap = $("aiProxySecretWrap");
+    if (secretWrap) secretWrap.style.display = mode === "proxy" ? "" : "none";
   }
 
   function saveAiConfig() {

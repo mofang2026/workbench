@@ -8,9 +8,26 @@
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Api-Key",
   "Access-Control-Max-Age": "86400",
 };
+
+/**
+ * 共享密钥鉴权
+ * 前端请求需携带 X-Api-Key 请求头，与服务端环境变量 PROXY_API_SECRET 比对。
+ * 未配置 PROXY_API_SECRET 时拒绝请求（fail-closed），防止 API Key 配额被滥用。
+ */
+function authorize(req) {
+  const secret = process.env.PROXY_API_SECRET;
+  if (!secret) {
+    return { ok: false, code: 503, message: "服务端未配置 PROXY_API_SECRET 环境变量，代理接口已禁用" };
+  }
+  const provided = req.headers["x-api-key"];
+  if (!provided || provided !== secret) {
+    return { ok: false, code: 401, message: "Unauthorized: invalid or missing X-Api-Key" };
+  }
+  return { ok: true };
+}
 
 /**
  * 收集所有已配置的提供商（按优先级排序）
@@ -126,6 +143,12 @@ module.exports = async (req, res) => {
 
   if (req.method !== "POST") {
     return sendJson(res, { error: "Method not allowed" }, 405);
+  }
+
+  // 共享密钥鉴权
+  const auth = authorize(req);
+  if (!auth.ok) {
+    return sendJson(res, { error: auth.message }, auth.code);
   }
 
   // 解析请求体
