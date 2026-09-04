@@ -5,7 +5,8 @@
  * - 导出 PNG（html2canvas）+ 复制 HTML
  */
 
-const CardDesign = (function () {
+WB.define("CardDesign", [], () => {
+  const CardDesign = (function () {
   // 18 套模板
   const TEMPLATES = [
     { id: "quote-dark", name: "金句卡·暗夜", cat: "金句", layout: "quote", bg: "linear-gradient(135deg,#0f172a,#1e293b)", color: "#e2e8f0", accent: "#59c4ff" },
@@ -386,6 +387,6 @@ const CardDesign = (function () {
   }
 
   return { render };
-})();
-
-window.CardDesign = CardDesign;
+  })();
+  return CardDesign;
+});

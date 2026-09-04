@@ -6,7 +6,8 @@
  * - AI 内容打分 + 质检清单
  */
 
-const ContentEditor = (function () {
+WB.define("ContentEditor", ["Topics", "Keywords", "Db", "WorkbenchConfig", "AiGateway", "Calendar"], (Topics, Keywords, Db, WorkbenchConfig, AiGateway, Calendar) => {
+  const ContentEditor = (function () {
   const PLATFORMS = {
     xhs: {
       name: "小红书",
@@ -140,8 +141,8 @@ const ContentEditor = (function () {
     await loadList();
 
     // 合并渲染：选题灵感库 + 关键词库（内容页编辑器下方）
-    if (window.Topics) await window.Topics.render({ wrapper: $("contentTopics"), noHero: true });
-    if (window.Keywords) await window.Keywords.render({ wrapper: $("contentKeywords"), noHero: true });
+    if (Topics) await Topics.render({ wrapper: $("contentTopics"), noHero: true });
+    if (Keywords) await Keywords.render({ wrapper: $("contentKeywords"), noHero: true });
   }
 
   // U4 批量选择
@@ -182,7 +183,7 @@ const ContentEditor = (function () {
     const ok = await confirm(`确定将选中的 ${ids.length} 项${field === "status" ? `状态改为「${statusLabel(value)}」` : ""}？`);
     if (!ok) return;
     try {
-      await window.Db.updateMany("contents", ids, { [field]: value });
+      await Db.updateMany("contents", ids, { [field]: value });
       toast(`已更新 ${ids.length} 项`);
       clearSelection();
       await loadList();
@@ -197,7 +198,7 @@ const ContentEditor = (function () {
     const ok = await confirm(`确定删除选中的 ${ids.length} 项内容？此操作不可恢复！`);
     if (!ok) return;
     try {
-      const c = window.WorkbenchConfig.getSupabase();
+      const c = WorkbenchConfig.getSupabase();
       const { error } = await c.from("contents").delete().in("id", ids);
       if (error) throw new Error(error.message);
       toast(`已删除 ${ids.length} 项`);
@@ -212,7 +213,7 @@ const ContentEditor = (function () {
     const searchKw = ($("contentSearch")?.value || "").trim().toLowerCase();
     const filterStatus = $("contentFilterStatus")?.value || "all";
     try {
-      const list = await window.Db.list("contents", {
+      const list = await Db.list("contents", {
         select: "id, title, status, tags, ai_score, ai_checkpassed, updated_at, topic_id",
         order: { col: "updated_at", ascending: false },
       });
@@ -295,7 +296,7 @@ const ContentEditor = (function () {
   async function openEditor(id) {
     if (id) {
       try {
-        currentContent = await window.Db.get("contents", id);
+        currentContent = await Db.get("contents", id);
       } catch (e) {
         toast("加载失败: " + e.message);
         return;
@@ -778,7 +779,7 @@ ${bodyHtml}
   async function openAssetPicker() {
     let assets = [];
     try {
-      assets = await window.Db.list("assets", {
+      assets = await Db.list("assets", {
         select: "id, type, title, url, content, tags, platform, is_favorite, created_at",
         order: { col: "created_at", ascending: false },
         limit: 200,
@@ -899,7 +900,7 @@ ${bodyHtml}
 
         const prompt = `你是内容创作助手。请根据正文内容，从素材库中推荐最相关的 5 个素材。\n\n正文标题：${body.title || "无"}\n正文摘要：${body.body.slice(0, 500)}\n\n素材库：\n${assetBriefs}\n\n请输出最相关的 5 个素材的序号，按相关性排序。\n严格按 JSON 数组格式输出，如 [1, 5, 12, 23, 30]\n只输出 JSON 数组。`;
 
-        const text = await window.AiGateway.generate(prompt, {
+        const text = await AiGateway.generate(prompt, {
           system: "你是内容创作素材推荐专家。",
           maxTokens: 200,
         });
@@ -987,7 +988,7 @@ ${bodyHtml}
       showAiOutput(`正在生成${p.name}版本（${doneCount + 1}/${entries.length}）...`);
       try {
         const prompt = `原稿标题：${body.title}\n原稿正文：${body.body}\n\n请按以下要求改写：${p.rewritePrompt}\n\n严格按字段输出，格式为 JSON：\n${JSON.stringify(Object.fromEntries(p.fields.map(f => [f, ""])))}\n\n只输出 JSON，不要其他说明。`;
-        const text = await window.AiGateway.generate(prompt, {
+        const text = await AiGateway.generate(prompt, {
           system: "你是专业的多平台内容运营专家，精通小红书/抖音/B站/公众号的内容风格。",
           maxTokens: 2000,
         });
@@ -1020,7 +1021,7 @@ ${bodyHtml}
 
     try {
       const prompt = `原稿标题：${body.title}\n原稿正文：${body.body}\n\n请按以下要求改写：${p.rewritePrompt}\n\n严格按字段输出，格式为 JSON：\n${JSON.stringify(Object.fromEntries(p.fields.map(f => [f, ""])))}\n\n只输出 JSON，不要其他说明。`;
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是专业的多平台内容运营专家。",
         maxTokens: 2000,
       });
@@ -1195,7 +1196,7 @@ ${bodyHtml}
     try {
       const prompt = `你是爆款标题设计专家。请为主题「${topic}」生成 ${count} 个高点击率标题。\n\n平台：${platformName}\n内容简述：${desc || "无"}\n\n要求：\n1. 每个标题风格不同（数字型/疑问型/对比型/悬念型/痛点型/利益型等）\n2. 符合${platformName}平台的调性和字数习惯\n3. 有强烈点击欲望，但不标题党\n4. 长度控制在 15-30 字\n\n严格按 JSON 数组输出，每个元素含 title 和 type 两个字段：\n[{"title":"标题内容","type":"数字型"}]\n只输出 JSON。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是爆款标题设计专家，擅长为不同平台生成高点击率标题。",
         maxTokens: 1200,
       });
@@ -1261,7 +1262,7 @@ ${bodyHtml}
       $("fStatus").innerHTML = '<span class="ai-thinking"><span class="spinner"></span> 生成中...</span>';
       try {
         const prompt = `请根据标题公式「${f.template}」和主题「${t}」，生成 5 个不同的标题变体。\n示例：${f.example}\n\n要求：\n1. 严格遵循公式结构但内容灵活\n2. 符合自媒体爆款特征\n3. 15-30字\n\n直接输出 5 个标题，每行一个，不要序号和其他说明。`;
-        const text = await window.AiGateway.generate(prompt, {
+        const text = await AiGateway.generate(prompt, {
           system: "你是爆款标题设计专家。",
           maxTokens: 600,
         });
@@ -1300,7 +1301,7 @@ ${bodyHtml}
     try {
       const prompt = `请对以下自媒体标题进行专业评分和分析。\n\n标题：${title}\n\n请从以下维度评分（0-100），并给出分析：\n1. 吸引力度（点击欲望）\n2. 信息量（是否传达核心价值）\n3. 情感共鸣（是否触动目标受众）\n4. 平台适配（泛平台通用性）\n5. 合规安全（无违规风险）\n\n严格按 JSON 输出：\n${JSON.stringify({ scores: { attract: 0, info: 0, emotion: 0, platform: 0, compliance: 0 }, total: 0, level: "S/A/B/C", analysis: "", suggestions: [] }, null, 2)}\n只输出 JSON。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是内容运营专家，擅长标题效果评估。",
         maxTokens: 800,
       });
@@ -1415,7 +1416,7 @@ ${bodyHtml}
 
     showAiOutput("AI 处理中...");
     try {
-      const text = await window.AiGateway.generate(`${instruction}\n\n原文：\n${target}`, {
+      const text = await AiGateway.generate(`${instruction}\n\n原文：\n${target}`, {
         system: "你是专业的内容编辑，输出简洁直接。",
         maxTokens: 1500,
       });
@@ -1443,7 +1444,7 @@ ${bodyHtml}
     showAiOutput("AI 评分中...");
     try {
       const prompt = `请对以下内容进行评分和风险检测。\n\n标题：${body.title}\n正文：${body.body}\n\n请按以下 JSON 格式输出评分（0-100）：\n${JSON.stringify({ total: 0, completeness: 0, adaptability: 0, viral_potential: 0, compliance: 0, risk_level: "低/中/高", risk_warnings: [] })}\n\n只输出 JSON。`;
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是严格的内容审核专家，按平台规则评估内容质量。",
         useReasoner: true,
         maxTokens: 1000,
@@ -1532,7 +1533,7 @@ ${bodyHtml}
         revised_body: "修改后的正文（如无重大问题可原样返回）",
       })}\n\n只输出 JSON，不要其他说明。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是严格的内容合规审核专家，精通国内各大内容平台的审核规则和限流机制。检测结果要客观、具体、可操作。",
         useReasoner: true,
         maxTokens: 2500,
@@ -1668,7 +1669,7 @@ ${bodyHtml}
       return;
     }
     await saveContent(true);
-    window.Calendar.openCreateModal(currentContent);
+    Calendar.openCreateModal(currentContent);
   }
 
   // ========== 数据读写 ==========
@@ -1725,10 +1726,10 @@ ${bodyHtml}
 
     try {
       if (currentContent.id) {
-        await window.Db.update("contents", currentContent.id, payload);
+        await Db.update("contents", currentContent.id, payload);
         currentContent = { ...currentContent, ...payload };
       } else {
-        const created = await window.Db.create("contents", payload);
+        const created = await Db.create("contents", payload);
         currentContent = created;
       }
       if (!silent) toast("已保存");
@@ -1781,6 +1782,6 @@ ${bodyHtml}
     render,
     open: openEditor,
   };
-})();
-
-window.ContentEditor = ContentEditor;
+  })();
+  return ContentEditor;
+});

@@ -3,7 +3,8 @@
  * 功能：单篇数据录入 + 爆款/踩坑标记 + 维度统计 + 优质/低效筛选 + AI 周月报告
  */
 
-const Metrics = (function () {
+WB.define("Metrics", ["Db", "AiGateway"], (Db, AiGateway) => {
+  const Metrics = (function () {
   const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
   let cache = [];
   let contentsMap = {};
@@ -43,7 +44,7 @@ const Metrics = (function () {
     const wrap = $("metricsContent");
     wrap.innerHTML = `<div class="empty-state"><div class="ai-thinking"><span class="spinner"></span> 加载中...</div></div>`;
     try {
-      cache = await window.Db.list("metrics", {
+      cache = await Db.list("metrics", {
         select: "id, content_id, platform, views, likes, favorites, comments, shares, followers_gained, is_viral, is_flop, review_notes, recorded_at",
         order: { col: "recorded_at", ascending: false },
         limit: 500,
@@ -51,7 +52,7 @@ const Metrics = (function () {
       // 批量加载内容标题
       const ids = [...new Set(cache.map(m => m.content_id).filter(Boolean))];
       if (ids.length > 0) {
-        const contents = await window.Db.listByIds("contents", ids, { select: "id, title, tags, topic_id" });
+        const contents = await Db.listByIds("contents", ids, { select: "id, title, tags, topic_id" });
         contents.forEach(c => { contentsMap[c.id] = c; });
       }
       if (activeView === "list") renderList();
@@ -503,7 +504,7 @@ const Metrics = (function () {
     // 加载已发布内容列表供选择
     let contents = [];
     try {
-      contents = await window.Db.list("contents", {
+      contents = await Db.list("contents", {
         select: "id, title, status",
         eq: { status: "published" },
         order: { col: "updated_at", ascending: false },
@@ -583,7 +584,7 @@ const Metrics = (function () {
       $("btnDeleteM").addEventListener("click", async () => {
         const ok = await confirm("确定删除该条数据？");
         if (!ok) return;
-        await window.Db.remove("metrics", m.id);
+        await Db.remove("metrics", m.id);
         toast("已删除");
         closeModal();
         await loadData();
@@ -608,9 +609,9 @@ const Metrics = (function () {
     };
     try {
       if (id) {
-        await window.Db.update("metrics", id, payload);
+        await Db.update("metrics", id, payload);
       } else {
-        await window.Db.create("metrics", payload);
+        await Db.create("metrics", payload);
       }
       toast("已保存");
       closeModal();
@@ -650,7 +651,7 @@ const Metrics = (function () {
     `);
     $("btnSaveReview").addEventListener("click", async () => {
       try {
-        await window.Db.update("metrics", metric.id, { review_notes: $("rvNotes").value.trim() });
+        await Db.update("metrics", metric.id, { review_notes: $("rvNotes").value.trim() });
         metric.review_notes = $("rvNotes").value.trim();
         toast("复盘已保存");
         closeModal();
@@ -683,7 +684,7 @@ const Metrics = (function () {
 
       const prompt = `请根据以下自媒体运营数据，生成一份简洁的复盘报告，包含：1. 整体表现总结 2. 分平台表现分析 3. 优质内容共性 4. 改进建议 5. 下一步方向。\n\n数据摘要：\n总记录数：${cache.length}\n分平台数据：${JSON.stringify(byPlatform)}\nTop3 优质内容：${JSON.stringify(topContent)}\n\n请用中文输出，格式清晰，500字以内。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是自媒体运营数据分析专家，擅长从数据中发现规律并给出可执行建议。",
         maxTokens: 2000,
       });
@@ -745,7 +746,7 @@ const Metrics = (function () {
     // 预加载已发布内容，用于按标题匹配 content_id
     let published = [];
     try {
-      published = await window.Db.list("contents", {
+      published = await Db.list("contents", {
         select: "id, title",
         eq: { status: "published" },
         order: { col: "updated_at", ascending: false },
@@ -832,7 +833,7 @@ const Metrics = (function () {
       btn.textContent = "导入中...";
       try {
         // 需要显式写入 recorded_at；空标题行跳过
-        await window.Db.createMany("metrics", list.map(r => ({
+        await Db.createMany("metrics", list.map(r => ({
           content_id: r.content_id || null,
           platform: r.platform,
           views: r.views || 0,
@@ -999,6 +1000,6 @@ const Metrics = (function () {
   }
 
   return { render };
-})();
-
-window.Metrics = Metrics;
+  })();
+  return Metrics;
+});

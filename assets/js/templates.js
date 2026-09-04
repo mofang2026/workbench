@@ -4,7 +4,8 @@
  * 功能：CRUD + 分类筛选 + 一键复制 + 内置模板
  */
 
-const Templates = (function () {
+WB.define("Templates", ["Db", "AiGateway"], (Db, AiGateway) => {
+  const Templates = (function () {
   const TYPES = {
     layout: { name: "排版模板", icon: "📐" },
     ending: { name: "结尾模板", icon: "🔚" },
@@ -73,7 +74,7 @@ const Templates = (function () {
 
   async function loadList() {
     try {
-      cache = await window.Db.list("templates", {
+      cache = await Db.list("templates", {
         select: "id, name, type, platform, content, description, is_builtin, user_id",
         order: { col: "name", ascending: true },
         limit: 500,
@@ -156,7 +157,7 @@ const Templates = (function () {
       el.addEventListener("click", async () => {
         const ok = await confirm("确定删除该模板？");
         if (!ok) return;
-        await window.Db.remove("templates", el.dataset.del);
+        await Db.remove("templates", el.dataset.del);
         toast("已删除");
         await loadList();
       });
@@ -239,9 +240,9 @@ const Templates = (function () {
     }
     try {
       if (id) {
-        await window.Db.update("templates", id, payload);
+        await Db.update("templates", id, payload);
       } else {
-        await window.Db.create("templates", payload);
+        await Db.create("templates", payload);
       }
       toast("已保存");
       closeModal();
@@ -316,7 +317,7 @@ const Templates = (function () {
         content: "模板正文（含占位符）",
       }, null, 2)}\n\n只输出 JSON。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是自媒体模板设计专家，擅长为不同平台设计可复用的结构化模板。",
         maxTokens: 1500,
       });
@@ -328,7 +329,7 @@ const Templates = (function () {
       }
 
       // 入库
-      const saved = await window.Db.create("templates", {
+      const saved = await Db.create("templates", {
         name: parsed.name || `${track}-${typeInfo.name}`,
         type,
         platform,
@@ -447,7 +448,7 @@ const Templates = (function () {
     try {
       const prompt = `请根据模板和主题，填充模板中的占位符变量。\n\n模板：${t.content}\n\n主题：${topic}\n\n需要填充的变量：${emptyVars.join(", ")}\n已填写的变量：${Object.entries(manualVars).map(([k, v]) => `${k}=${v}`).join(", ") || "无"}\n\n请输出填充后的完整模板内容，保留原有结构和格式，只替换占位符部分。\n直接输出填充后的内容，不要其他说明。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是内容创作助手，擅长根据主题填充模板变量，保持模板结构不变。",
         maxTokens: 1500,
       });
@@ -503,6 +504,6 @@ const Templates = (function () {
   }
 
   return { render, loadList, recommendByTrack };
-})();
-
-window.Templates = Templates;
+  })();
+  return Templates;
+});

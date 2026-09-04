@@ -5,7 +5,8 @@
  * - 分镜表 + 时长统计 + 导出
  */
 
-const VideoScript = (function () {
+WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
+  const VideoScript = (function () {
   const SCRIPT_TYPES = {
     short: { name: "短视频脚本", duration: "30-60s", platforms: ["抖音", "小红书"], desc: "节奏快、前3秒抓人、强互动结尾" },
     oral: { name: "口播视频脚本", duration: "2-5min", platforms: ["抖音", "B站", "公众号"], desc: "信息密度高、逻辑清晰、金句穿插" },
@@ -44,7 +45,7 @@ const VideoScript = (function () {
 
   async function loadList() {
     try {
-      scriptsCache = await window.Db.list("video_scripts", {
+      scriptsCache = await Db.list("video_scripts", {
         select: "id, title, type, duration, platform, shots, created_at, updated_at",
         order: { col: "updated_at", ascending: false },
         limit: 100,
@@ -207,7 +208,7 @@ const VideoScript = (function () {
         summary: "脚本概要",
       }, null, 2)}\n\n只输出 JSON，shots 数组至少包含 5 个分镜。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是专业视频脚本编剧，擅长为不同平台创作结构化视频脚本。",
         maxTokens: 2500,
       });
@@ -219,7 +220,7 @@ const VideoScript = (function () {
       }
 
       // 入库
-      const saved = await window.Db.create("video_scripts", {
+      const saved = await Db.create("video_scripts", {
         title: parsed.title || topic,
         type,
         duration,
@@ -247,7 +248,7 @@ const VideoScript = (function () {
 
   async function viewScript(id) {
     try {
-      const s = await window.Db.get("video_scripts", id);
+      const s = await Db.get("video_scripts", id);
       currentScript = s;
       showScriptDetail(s);
     } catch (e) {
@@ -353,7 +354,7 @@ const VideoScript = (function () {
 
   async function exportScript(id) {
     try {
-      const s = await window.Db.get("video_scripts", id);
+      const s = await Db.get("video_scripts", id);
       exportScriptData(s);
     } catch (e) {
       toast("导出失败: " + e.message);
@@ -364,7 +365,7 @@ const VideoScript = (function () {
     const ok = await confirm("确定删除该脚本？");
     if (!ok) return;
     try {
-      await window.Db.remove("video_scripts", id);
+      await Db.remove("video_scripts", id);
       toast("已删除");
       await loadList();
     } catch (e) {
@@ -373,6 +374,6 @@ const VideoScript = (function () {
   }
 
   return { render };
-})();
-
-window.VideoScript = VideoScript;
+  })();
+  return VideoScript;
+});

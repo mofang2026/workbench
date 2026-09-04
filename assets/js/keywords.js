@@ -6,7 +6,8 @@
  * - 批量导入
  */
 
-const Keywords = (function () {
+WB.define("Keywords", ["Db"], (Db) => {
+  const Keywords = (function () {
   const CATEGORIES = {
     industry: { name: "行业词", color: "brand" },
     long_tail: { name: "长尾词", color: "ok" },
@@ -81,7 +82,7 @@ const Keywords = (function () {
     const wrap = $("kwList");
     wrap.innerHTML = `<div class="empty-state"><div class="ai-thinking"><span class="spinner"></span> 加载中...</div></div>`;
     try {
-      cache = await window.Db.list("keywords", {
+      cache = await Db.list("keywords", {
         order: { col: "updated_at", ascending: false },
         limit: 1000,
       });
@@ -244,7 +245,7 @@ const Keywords = (function () {
       $("btnDeleteKw").addEventListener("click", async () => {
         const ok = await confirm("确定删除该关键词？");
         if (!ok) return;
-        await window.Db.remove("keywords", k.id);
+        await Db.remove("keywords", k.id);
         toast("已删除");
         closeModal();
         await loadList();
@@ -267,9 +268,9 @@ const Keywords = (function () {
     };
     try {
       if (id) {
-        await window.Db.update("keywords", id, payload);
+        await Db.update("keywords", id, payload);
       } else {
-        await window.Db.create("keywords", payload);
+        await Db.create("keywords", payload);
       }
       toast("已保存");
       closeModal();
@@ -282,7 +283,7 @@ const Keywords = (function () {
   // 从选题灵感库聚合关键词
   async function aggregateFromTopics() {
     try {
-      const topics = await window.Db.list("topics", {
+      const topics = await Db.list("topics", {
         select: "id, keywords, platform, track, is_hot",
         limit: 500,
       });
@@ -313,7 +314,7 @@ const Keywords = (function () {
       for (const [word, info] of words) {
         if (existing.has(word)) { skipped++; continue; }
         try {
-          await window.Db.create("keywords", {
+          await Db.create("keywords", {
             word,
             category: info.hot_count > 0 ? "topic" : "long_tail",
             platform: info.platforms.size === 1 ? [...info.platforms][0] : "all",
@@ -376,7 +377,7 @@ const Keywords = (function () {
         const word = parts[0];
         const cat = parts[1] && CATEGORIES[parts[1]] ? parts[1] : defaultCat;
         try {
-          await window.Db.create("keywords", {
+          await Db.create("keywords", {
             word,
             category: cat,
             platform: defaultPlat,
@@ -396,6 +397,6 @@ const Keywords = (function () {
   }
 
   return { render, loadList };
-})();
-
-window.Keywords = Keywords;
+  })();
+  return Keywords;
+});

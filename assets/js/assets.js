@@ -4,7 +4,8 @@
  * 功能：CRUD + 标签检索 + 平台筛选 + 收藏 + 一键复制/插入
  */
 
-const Assets = (function () {
+WB.define("Assets", ["Db", "AiGateway"], (Db, AiGateway) => {
+  const Assets = (function () {
   const TYPES = {
     cover: { name: "封面图", icon: "🖼️" },
     image: { name: "配图", icon: "📷" },
@@ -91,7 +92,7 @@ const Assets = (function () {
     const grid = $("assetGrid");
     grid.innerHTML = `<div class="empty-state"><div class="ai-thinking"><span class="spinner"></span> 加载中...</div></div>`;
     try {
-      cache = await window.Db.list("assets", {
+      cache = await Db.list("assets", {
         select: "id, type, title, url, content, tags, platform, is_favorite, created_at",
         order: { col: "created_at", ascending: false },
         limit: 500,
@@ -206,7 +207,7 @@ const Assets = (function () {
     const a = cache.find(x => x.id === id);
     if (!a) return;
     try {
-      await window.Db.update("assets", id, { is_favorite: !a.is_favorite });
+      await Db.update("assets", id, { is_favorite: !a.is_favorite });
       a.is_favorite = !a.is_favorite;
       renderGrid();
     } catch (e) {
@@ -298,7 +299,7 @@ const Assets = (function () {
       $("btnDeleteAsset").addEventListener("click", async () => {
         const ok = await confirm("确定删除该素材？");
         if (!ok) return;
-        await window.Db.remove("assets", a.id);
+        await Db.remove("assets", a.id);
         toast("已删除");
         closeModal();
         await loadList();
@@ -323,9 +324,9 @@ const Assets = (function () {
     }
     try {
       if (id) {
-        await window.Db.update("assets", id, payload);
+        await Db.update("assets", id, payload);
       } else {
-        await window.Db.create("assets", payload);
+        await Db.create("assets", payload);
       }
       toast("已保存");
       closeModal();
@@ -344,7 +345,7 @@ const Assets = (function () {
     try {
       const tags = await callAiTag(a);
       if (tags.length === 0) { toast("未生成标签"); return; }
-      await window.Db.update("assets", id, { tags: [...new Set([...(a.tags || []), ...tags])] });
+      await Db.update("assets", id, { tags: [...new Set([...(a.tags || []), ...tags])] });
       a.tags = [...new Set([...(a.tags || []), ...tags])];
       renderGrid();
       toast(`已添加 ${tags.length} 个 AI 标签：${tags.join("、")}`);
@@ -364,7 +365,7 @@ const Assets = (function () {
       try {
         const tags = await callAiTag(a);
         if (tags.length > 0) {
-          await window.Db.update("assets", id, { tags: [...new Set([...(a.tags || []), ...tags])] });
+          await Db.update("assets", id, { tags: [...new Set([...(a.tags || []), ...tags])] });
           a.tags = [...new Set([...(a.tags || []), ...tags])];
           okCount++;
         }
@@ -378,7 +379,7 @@ const Assets = (function () {
   async function callAiTag(asset) {
     const t = TYPES[asset.type] || { name: asset.type };
     const prompt = `请为以下自媒体素材生成 3-5 个精准标签。\n\n素材类型：${t.name}\n标题：${asset.title || "无"}\n文案：${asset.content || "无"}\n链接：${asset.url || "无"}\n现有标签：${(asset.tags || []).join("、") || "无"}\n\n要求：\n1. 标签简洁（2-4字）\n2. 涵盖内容主题、使用场景、情绪风格\n3. 适合搜索和分类\n\n严格按 JSON 数组格式输出，如 ["标签1","标签2"]\n只输出 JSON 数组。`;
-    const text = await window.AiGateway.generate(prompt, {
+    const text = await AiGateway.generate(prompt, {
       system: "你是素材分类专家，擅长为自媒体素材生成精准标签。",
       maxTokens: 300,
     });
@@ -447,7 +448,7 @@ const Assets = (function () {
       const platformLabel = PLATFORMS[platform] || "通用";
       const prompt = `请生成 ${count} 条高质量自媒体文案金句。\n\n主题：${theme}\n风格：${style || "不限"}\n适用平台：${platformLabel}\n\n要求：\n1. 每条金句独立成句，15-40字\n2. 有传播力和共鸣感\n3. 适合作为内容开头、结尾或引用\n4. 风格多样化，避免同质化\n\n严格按 JSON 数组格式输出：\n${JSON.stringify(["金句1", "金句2"], null, 2)}\n\n只输出 JSON 数组。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是自媒体文案创作专家，擅长写出有传播力的金句。",
         maxTokens: 2000,
       });
@@ -464,7 +465,7 @@ const Assets = (function () {
         const quote = String(q).trim();
         if (!quote) continue;
         try {
-          const item = await window.Db.create("assets", {
+          const item = await Db.create("assets", {
             type: "quote",
             title: quote.slice(0, 20) + (quote.length > 20 ? "..." : ""),
             content: quote,
@@ -536,7 +537,7 @@ const Assets = (function () {
       const type = typeKeys.includes(typeStr) ? typeStr : "quote";
       const isUrl = contentOrUrl && /^https?:\/\//.test(contentOrUrl);
       try {
-        await window.Db.create("assets", {
+        await Db.create("assets", {
           type,
           title: title || (isUrl ? "未命名" : contentOrUrl?.slice(0, 20) || "未命名"),
           url: isUrl ? contentOrUrl : "",
@@ -559,7 +560,7 @@ const Assets = (function () {
   async function batchUpdateFav(ids) {
     if (ids.length === 0) { toast("请先勾选素材"); return; }
     for (const id of ids) {
-      try { await window.Db.update("assets", id, { is_favorite: true }); } catch (e) {}
+      try { await Db.update("assets", id, { is_favorite: true }); } catch (e) {}
     }
     toast(`已收藏 ${ids.length} 个素材`);
     clearSelection();
@@ -571,7 +572,7 @@ const Assets = (function () {
     const ok = await confirm(`确定删除选中的 ${ids.length} 个素材？`);
     if (!ok) return;
     for (const id of ids) {
-      try { await window.Db.remove("assets", id); } catch (e) {}
+      try { await Db.remove("assets", id); } catch (e) {}
     }
     toast(`已删除 ${ids.length} 个素材`);
     clearSelection();
@@ -579,6 +580,6 @@ const Assets = (function () {
   }
 
   return { render, loadList };
-})();
-
-window.Assets = Assets;
+  })();
+  return Assets;
+});

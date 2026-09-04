@@ -6,7 +6,7 @@
  * - 向后兼容：自动迁移旧版单提供商配置
  */
 
-const AiGateway = (function () {
+WB.define("AiGateway", [], () => {
   const AI_CFG_KEY = "workbench-ai-settings-v2";
 
   // 预设提供商模板
@@ -431,6 +431,4 @@ const AiGateway = (function () {
     streamIntoEl,
     PROVIDER_PRESETS,
   };
-})();
-
-window.AiGateway = AiGateway;
+});

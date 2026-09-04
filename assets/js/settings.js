@@ -5,7 +5,8 @@
  * - Supabase 配置查看/重置
  */
 
-const Settings = (function () {
+WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig"], (Reminders, Db, AiGateway, WorkbenchConfig) => {
+  const Settings = (function () {
   const PLATFORMS = {
     xhs: { name: "小红书", url: "https://creator.xiaohongshu.com" },
     douyin: { name: "抖音", url: "https://creator.douyin.com" },
@@ -68,7 +69,7 @@ const Settings = (function () {
 
     renderAiConfig();
     await renderAccounts();
-    if (window.Reminders) window.Reminders.renderSettingsPanel($("reminderSettingsCard"));
+    if (Reminders) Reminders.renderSettingsPanel($("reminderSettingsCard"));
     renderSystemConfig();
 
     $("btnNewAccount").addEventListener("click", () => openAccountEditor(null));
@@ -172,7 +173,7 @@ const Settings = (function () {
     const status = $("exportStatus");
     if (status) status.textContent = `正在导出 ${conf.label}...`;
     try {
-      const rows = await window.Db.list(tableName, {
+      const rows = await Db.list(tableName, {
         select: conf.columns.join(", "),
         order: { col: conf.orderCol, ascending: false },
         limit: 5000,
@@ -192,7 +193,7 @@ const Settings = (function () {
     let okCount = 0;
     for (const [tableName, conf] of Object.entries(EXPORT_TABLES)) {
       try {
-        const rows = await window.Db.list(tableName, {
+        const rows = await Db.list(tableName, {
           select: conf.columns.join(", "),
           order: { col: conf.orderCol, ascending: false },
           limit: 5000,
@@ -227,7 +228,7 @@ const Settings = (function () {
   // ========== AI 配置（多提供商 + 故障转移） ==========
 
   function renderAiConfig() {
-    const s = window.AiGateway.getSettings();
+    const s = AiGateway.getSettings();
     const isCloudBase = window.location.hostname.includes("tcloudbaseapp.com");
     const card = $("aiConfigCard");
     const providerKeys = Object.keys(s.providers);
@@ -346,7 +347,7 @@ const Settings = (function () {
 
   // 从表单收集配置并保存
   function collectAndSave() {
-    const s = window.AiGateway.getSettings();
+    const s = AiGateway.getSettings();
     s.mode = document.querySelector('input[name="aiMode"]:checked')?.value || "direct";
     s.failoverEnabled = $("aiFailover").checked;
     s.activeProvider = $("aiActiveProvider").value;
@@ -361,7 +362,7 @@ const Settings = (function () {
       s.providers[k].reasonerModel = block.querySelector(".ai-provider-reasoner").value.trim();
     });
 
-    window.AiGateway.saveSettings(s);
+    AiGateway.saveSettings(s);
   }
 
   function toggleAiModeHint() {
@@ -373,9 +374,9 @@ const Settings = (function () {
 
   function saveAiConfig() {
     collectAndSave();
-    const s = window.AiGateway.getSettings();
+    const s = AiGateway.getSettings();
     if (s.mode === "direct") {
-      const available = window.AiGateway.getAvailableProviders();
+      const available = AiGateway.getAvailableProviders();
       if (available.length === 0) {
         toast("直连模式至少需启用一个提供商并填写 API Key");
         return;
@@ -389,13 +390,13 @@ const Settings = (function () {
     collectAndSave();
     result.innerHTML = '<span class="ai-thinking"><span class="spinner"></span> 测试中...</span>';
     try {
-      const s = window.AiGateway.getSettings();
-      const available = window.AiGateway.getAvailableProviders();
+      const s = AiGateway.getSettings();
+      const available = AiGateway.getAvailableProviders();
       if (available.length === 0) {
         result.innerHTML = '<span class="text-danger">✗ 未配置可用的提供商</span>';
         return;
       }
-      const text = await window.AiGateway.generate("请回复「连接成功」四个字", {
+      const text = await AiGateway.generate("请回复「连接成功」四个字", {
         system: "简洁回复。",
         maxTokens: 50,
       });
@@ -411,7 +412,7 @@ const Settings = (function () {
   async function renderAccounts() {
     const wrap = $("accountList");
     try {
-      accountsCache = await window.Db.list("accounts", {
+      accountsCache = await Db.list("accounts", {
         order: { col: "platform", ascending: true },
       });
       if (accountsCache.length === 0) {
@@ -546,9 +547,9 @@ const Settings = (function () {
 
     try {
       if (id) {
-        await window.Db.update("accounts", id, payload);
+        await Db.update("accounts", id, payload);
       } else {
-        await window.Db.create("accounts", payload);
+        await Db.create("accounts", payload);
       }
       toast("已保存");
       closeModal();
@@ -562,7 +563,7 @@ const Settings = (function () {
     const ok = await confirm("确定删除该账号？");
     if (!ok) return;
     try {
-      await window.Db.remove("accounts", id);
+      await Db.remove("accounts", id);
       toast("已删除");
       closeModal();
       await renderAccounts();
@@ -574,7 +575,7 @@ const Settings = (function () {
   // ========== 系统配置 ==========
 
   function renderSystemConfig() {
-    const cfg = window.WorkbenchConfig.getSupabaseConfig();
+    const cfg = WorkbenchConfig.getSupabaseConfig();
     const wrap = $("systemConfig");
     wrap.innerHTML = `
       <div class="list-item">
@@ -604,6 +605,6 @@ const Settings = (function () {
   }
 
   return { render };
-})();
-
-window.Settings = Settings;
+  })();
+  return Settings;
+});

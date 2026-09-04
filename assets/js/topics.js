@@ -5,7 +5,8 @@
  * - 一键转为内容创作
  */
 
-const Topics = (function () {
+WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, ContentEditor) => {
+  const Topics = (function () {
   const STATUS_FLOW = [
     { key: "idea", label: "灵感储备" },
     { key: "pending", label: "待创作" },
@@ -149,7 +150,7 @@ const Topics = (function () {
 
       const prompt = `以下是 ${hotTopics.length} 个标记为「爆款」的选题。请分析它们的共性特征，输出：\n1. 标题规律（句式、关键词、情绪点）\n2. 高频赛道和主题\n3. 切入角度分析\n4. 基于这些规律，再生成 5 个新的爆款选题建议（标题 + 简述）\n\n爆款选题数据：\n${JSON.stringify(sample, null, 2)}\n\n请用中文输出，格式清晰。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是自媒体爆款选题分析专家，擅长从选题数据中提炼规律。",
         maxTokens: 2500,
       });
@@ -239,7 +240,7 @@ const Topics = (function () {
 
       const prompt = `你是自媒体选题策划专家。请为以下配置生成 8 个高质量选题建议。\n\n赛道：${track}\n目标平台：${platformLabel}\n关键词：${keywords || "无"}\n补充说明：${extra || "无"}\n\n已有选题（避免重复）：\n${existingTitles.join("\n")}\n\n要求：\n1. 每个选题包含标题、简述、切入角度、预估热度（1-10）\n2. 标题要有吸引力，符合${platformLabel}平台调性\n3. 切入角度要差异化，避免同质化\n4. 热度评估基于当前平台趋势和用户兴趣\n\n严格按以下 JSON 数组格式输出：\n${JSON.stringify([{ title: "", description: "", angle: "", heat: 8, keywords: ["关键词1"] }], null, 2)}\n\n只输出 JSON 数组，不要其他说明。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是资深自媒体选题策划师，精通小红书、抖音、B站、公众号的内容趋势和选题方法论。输出必须严格符合 JSON 格式。",
         maxTokens: 2500,
       });
@@ -306,7 +307,7 @@ const Topics = (function () {
       const t = recCache[idx];
       if (!t) continue;
       try {
-        await window.Db.create("topics", {
+        await Db.create("topics", {
           title: t.title || "",
           description: t.description || "",
           platform,
@@ -367,7 +368,7 @@ const Topics = (function () {
         similar_hot: "是否有类似爆款，简述",
       })}\n\n只输出 JSON。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是自媒体选题评估专家，擅长判断选题的爆款潜力和平台适配度。",
         useReasoner: true,
         maxTokens: 1500,
@@ -421,7 +422,7 @@ const Topics = (function () {
 
   async function loadList() {
     try {
-      listData = await window.Db.list("topics", {
+      listData = await Db.list("topics", {
         order: { col: "updated_at", ascending: false },
       });
       renderHotStats();
@@ -587,10 +588,10 @@ const Topics = (function () {
 
     try {
       if (id) {
-        await window.Db.update("topics", id, payload);
+        await Db.update("topics", id, payload);
         toast("已更新");
       } else {
-        await window.Db.create("topics", payload);
+        await Db.create("topics", payload);
         toast("已创建");
       }
       closeModal();
@@ -602,7 +603,7 @@ const Topics = (function () {
 
   async function updateStatus(id, status) {
     try {
-      await window.Db.update("topics", id, { status });
+      await Db.update("topics", id, { status });
       toast(`已${status === "abandoned" ? "废弃" : "更新"}`);
       closeModal();
       await loadList();
@@ -616,7 +617,7 @@ const Topics = (function () {
     if (!topic) return;
     try {
       // 创建草稿内容
-      const content = await window.Db.create("contents", {
+      const content = await Db.create("contents", {
         topic_id: topicId,
         title: topic.title,
         body: topic.description || "",
@@ -624,13 +625,13 @@ const Topics = (function () {
         tags: topic.keywords || [],
       });
       // 选题状态 → 创作中
-      await window.Db.update("topics", topicId, { status: "creating" });
+      await Db.update("topics", topicId, { status: "creating" });
       toast("已创建内容草稿，跳转到创作中心");
       closeModal();
       await loadList();
       // 切换到内容创作页，再打开草稿编辑器
       await window.switchPage("content");
-      window.ContentEditor.open(content.id);
+      ContentEditor.open(content.id);
     } catch (e) {
       toast("创建失败: " + e.message);
     }
@@ -641,6 +642,6 @@ const Topics = (function () {
   }
 
   return { render, loadList };
-})();
-
-window.Topics = Topics;
+  })();
+  return Topics;
+});

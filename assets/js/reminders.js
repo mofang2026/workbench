@@ -5,7 +5,8 @@
  * - 支持浏览器通知（Notification API）+ 页内徽标（标题栏红点 + 顶栏横幅）
  * - 配置存于 localStorage
  */
-const Reminders = (function () {
+WB.define("Reminders", ["Db"], (Db) => {
+  const Reminders = (function () {
   const KEY = "workbench-reminder-settings";
   const SEEN_KEY = "workbench-reminder-seen-v1";
 
@@ -95,7 +96,7 @@ const Reminders = (function () {
       const start = new Date(now.getTime() - 24 * 3600 * 1000).toISOString(); // 回溯一天查逾期
       const end = new Date(now.getTime() + settings.leadMinutes * 60 * 1000).toISOString();
 
-      const schedules = await window.Db.list("schedules", {
+      const schedules = await Db.list("schedules", {
         select: "id, content_id, account_id, platform, scheduled_at, actual_published_at, reminder_sent",
         gte: { scheduled_at: start },
         lt: { scheduled_at: end },
@@ -107,7 +108,7 @@ const Reminders = (function () {
       const ids = [...new Set([...upcoming, ...overdue].map((s) => s.content_id).filter(Boolean))];
       const titleMap = {};
       if (ids.length) {
-        const cs = await window.Db.listByIds("contents", ids, { select: "id, title" });
+        const cs = await Db.listByIds("contents", ids, { select: "id, title" });
         cs.forEach((c) => { titleMap[c.id] = c.title; });
       }
 
@@ -253,6 +254,6 @@ const Reminders = (function () {
   }
 
   return { start, renderSettingsPanel, requestPermission };
-})();
-
-window.Reminders = Reminders;
+  })();
+  return Reminders;
+});

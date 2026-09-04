@@ -6,7 +6,8 @@
  * - 标记已发布
  */
 
-const Calendar = (function () {
+WB.define("Calendar", ["Db"], (Db) => {
+  const Calendar = (function () {
   const PLATFORMS = {
     xhs: { name: "小红书", url: "https://creator.xiaohongshu.com/publish/publish" },
     douyin: { name: "抖音", url: "https://creator.douyin.com/creator-micro/content/upload" },
@@ -154,7 +155,7 @@ const Calendar = (function () {
   // 加载当前用户的平台账号（多账号矩阵）
   async function loadAccounts() {
     try {
-      accountsCache = await window.Db.list("accounts", {
+      accountsCache = await Db.list("accounts", {
         select: "id, platform, account_name, account_id, group_name",
         order: { col: "platform", ascending: true },
       });
@@ -268,7 +269,7 @@ const Calendar = (function () {
 
     try {
       // 服务端按日期范围过滤（G7 修复：避免全量拉取）
-      schedulesData = await window.Db.list("schedules", {
+      schedulesData = await Db.list("schedules", {
         select: "id, content_id, account_id, platform, scheduled_at, actual_published_at, publish_url, publish_params, remark",
         gte: { scheduled_at: start },
         lt: { scheduled_at: end },
@@ -278,7 +279,7 @@ const Calendar = (function () {
       // 通过 Db Gateway 批量加载关联内容标题（G6 修复：不再直连 Supabase）
       const contentIds = [...new Set(schedulesData.map(s => s.content_id).filter(Boolean))];
       if (contentIds.length > 0) {
-        const contents = await window.Db.listByIds("contents", contentIds, { select: "id, title" });
+        const contents = await Db.listByIds("contents", contentIds, { select: "id, title" });
         contents.forEach(item => {
           contentsCache[item.id] = item.title;
         });
@@ -407,7 +408,7 @@ const Calendar = (function () {
     next.setHours(old.getHours(), old.getMinutes(), 0, 0);
     // 跨月时若日历显示的是其他月，仍按目标日期落地
     try {
-      await window.Db.update("schedules", id, { scheduled_at: next.toISOString() });
+      await Db.update("schedules", id, { scheduled_at: next.toISOString() });
       toast(`已调整到 ${next.getMonth() + 1}月${next.getDate()}日 ${String(next.getHours()).padStart(2, "0")}:${String(next.getMinutes()).padStart(2, "0")}`);
       await loadSchedules();
     } catch (e) {
@@ -612,7 +613,7 @@ const Calendar = (function () {
     const date = defaultDate || new Date();
     date.setHours(19, 0, 0, 0); // 默认晚上 7 点
 
-    const contents = await window.Db.list("contents", {
+    const contents = await Db.list("contents", {
       select: "id, title",
       order: { col: "updated_at", ascending: false },
       limit: 50,
@@ -746,7 +747,7 @@ const Calendar = (function () {
       let title = contentsCache[s.content_id] || "";
       let body = "";
       if (s.content_id) {
-        const c = await window.Db.get("contents", s.content_id, { select: "title, body, title, adaptations" });
+        const c = await Db.get("contents", s.content_id, { select: "title, body, title, adaptations" });
         if (c) {
           title = c.title || title;
           // 优先用平台适配正文，否则用原稿
@@ -822,7 +823,7 @@ const Calendar = (function () {
   async function openTemplateModal() {
     let contents = [];
     try {
-      contents = await window.Db.list("contents", {
+      contents = await Db.list("contents", {
         select: "id, title, status",
         order: { col: "updated_at", ascending: false },
         limit: 100,
@@ -1004,7 +1005,7 @@ const Calendar = (function () {
             scheduleDate.setHours(rule.hour, rule.minute || 0, 0, 0);
             const platform = rule.platform || (tpl.platformCycle ? platforms[contentIdx % platforms.length] : defaultPlatform);
             try {
-              await window.Db.create("schedules", {
+              await Db.create("schedules", {
                 content_id: contentIds[contentIdx],
                 platform,
                 scheduled_at: scheduleDate.toISOString(),
@@ -1038,7 +1039,7 @@ const Calendar = (function () {
   async function openBatchScheduleModal() {
     let contents = [];
     try {
-      contents = await window.Db.list("contents", {
+      contents = await Db.list("contents", {
         select: "id, title, status",
         order: { col: "updated_at", ascending: false },
         limit: 100,
@@ -1151,7 +1152,7 @@ const Calendar = (function () {
             scheduleDate.setDate(baseDate.getDate() + i + j * interval);
             scheduleDate.setHours(baseDate.getHours(), baseDate.getMinutes(), 0, 0);
             try {
-              await window.Db.create("schedules", {
+              await Db.create("schedules", {
                 content_id: contentIds[i],
                 platform: platforms[j],
                 scheduled_at: scheduleDate.toISOString(),
@@ -1190,7 +1191,7 @@ const Calendar = (function () {
     if (!timeStr) { toast("请选择时间"); return; }
 
     try {
-      await window.Db.create("schedules", {
+      await Db.create("schedules", {
         content_id: contentId,
         account_id: accountId || null,
         platform,
@@ -1214,7 +1215,7 @@ const Calendar = (function () {
     const remark = $("sRemark").value.trim();
     const accountId = $("sAccount") ? $("sAccount").value : "";
     try {
-      await window.Db.update("schedules", id, {
+      await Db.update("schedules", id, {
         scheduled_at: new Date(timeStr).toISOString(),
         account_id: accountId || null,
         publish_params: readParamsFromForm(platform),
@@ -1232,7 +1233,7 @@ const Calendar = (function () {
     const ok = await confirm("确定删除该排期？");
     if (!ok) return;
     try {
-      await window.Db.remove("schedules", id);
+      await Db.remove("schedules", id);
       toast("已删除");
       closeModal();
       await loadSchedules();
@@ -1243,7 +1244,7 @@ const Calendar = (function () {
 
   async function markPublish(id, published) {
     try {
-      await window.Db.update("schedules", id, {
+      await Db.update("schedules", id, {
         actual_published_at: published ? new Date().toISOString() : null,
       });
       if (published) {
@@ -1251,23 +1252,23 @@ const Calendar = (function () {
         const s = schedulesData.find(x => x.id === id);
         if (s) {
           // 查询该内容的所有排期
-          const allSchedules = await window.Db.list("schedules", {
+          const allSchedules = await Db.list("schedules", {
             select: "id, actual_published_at",
             eq: { content_id: s.content_id },
           });
           const allPublished = allSchedules.length > 0 && allSchedules.every(x => x.actual_published_at);
           const contentStatus = allPublished ? "published" : "pending_publish";
-          await window.Db.update("contents", s.content_id, { status: contentStatus });
+          await Db.update("contents", s.content_id, { status: contentStatus });
 
           // U5：自动进入数据复盘池——为该 schedule 创建一条 metrics 记录（数据全 0，待手动补录）
           // 通过 schedule_id 去重，避免重复创建
-          const existed = await window.Db.list("metrics", {
+          const existed = await Db.list("metrics", {
             select: "id",
             eq: { schedule_id: id },
             limit: 1,
           });
           if (existed.length === 0) {
-            await window.Db.create("metrics", {
+            await Db.create("metrics", {
               content_id: s.content_id,
               schedule_id: id,
               platform: s.platform,
@@ -1283,18 +1284,18 @@ const Calendar = (function () {
         // 取消发布标记时：若 content 已是 published，回退到 pending_publish
         const s = schedulesData.find(x => x.id === id);
         if (s) {
-          const content = await window.Db.get("contents", s.content_id, { select: "id, status" });
+          const content = await Db.get("contents", s.content_id, { select: "id, status" });
           if (content && content.status === "published") {
-            await window.Db.update("contents", s.content_id, { status: "pending_publish" });
+            await Db.update("contents", s.content_id, { status: "pending_publish" });
           }
           // U5：取消发布时删除自动创建的复盘记录（仅删除数据全 0 且无复盘笔记的占位记录）
-          const placeholders = await window.Db.list("metrics", {
+          const placeholders = await Db.list("metrics", {
             select: "id, views, review_notes",
             eq: { schedule_id: id },
           });
           for (const m of placeholders) {
             if ((m.views || 0) === 0 && !m.review_notes) {
-              await window.Db.remove("metrics", m.id);
+              await Db.remove("metrics", m.id);
             }
           }
         }
@@ -1311,6 +1312,6 @@ const Calendar = (function () {
     render,
     openCreateModal,
   };
-})();
-
-window.Calendar = Calendar;
+  })();
+  return Calendar;
+});

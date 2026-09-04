@@ -6,6 +6,7 @@
  * - 快捷操作
  */
 
+WB.define("App", ["WorkbenchConfig", "Db", "Reminders", "AiGateway"], (WorkbenchConfig, Db, Reminders, AiGateway) => {
 const $ = (id) => document.getElementById(id);
 
 const PLATFORM_META = {
@@ -30,7 +31,7 @@ function toast(msg, duration = 2200) {
 
 // ========== 登录流程 ==========
 function initAuth() {
-  const configured = window.WorkbenchConfig.isConfigured();
+  const configured = WorkbenchConfig.isConfigured();
   if (configured) {
     $("authStepConfig").classList.add("hidden");
     $("authStepLogin").classList.remove("hidden");
@@ -47,7 +48,7 @@ function initAuth() {
       showAuthError("URL 格式不对，应为 https://xxxxx.supabase.co");
       return;
     }
-    window.WorkbenchConfig.saveConfig({ supabaseUrl: url, supabaseAnonKey: key });
+    WorkbenchConfig.saveConfig({ supabaseUrl: url, supabaseAnonKey: key });
     toast("配置已保存，请登录");
     // 刷新页面让 Supabase 客户端重新初始化
     location.reload();
@@ -56,9 +57,9 @@ function initAuth() {
   $("btnLogin").addEventListener("click", handleLogin);
 
   $("btnLogout").addEventListener("click", async () => {
-    const c = window.WorkbenchConfig.getSupabase();
+    const c = WorkbenchConfig.getSupabase();
     if (c) await c.auth.signOut();
-    window.WorkbenchConfig.clearCurrentUser();
+    WorkbenchConfig.clearCurrentUser();
     $("authMask").classList.remove("hidden");
     $("userBadge").classList.add("hidden");
     $("btnLogout").classList.add("hidden");
@@ -89,7 +90,7 @@ async function handleLogin() {
   btn.innerHTML = '<span class="spinner"></span> 登录中...';
 
   try {
-    const c = window.WorkbenchConfig.getSupabase();
+    const c = WorkbenchConfig.getSupabase();
     if (!c) {
       showAuthError("Supabase 未初始化，请检查配置");
       return;
@@ -150,13 +151,13 @@ async function enterApp(user) {
   await renderDashboard();
 
   // 启动定时提醒（发布到期 / 逾期未发布），若已配置
-  if (window.Reminders) window.Reminders.start();
+  if (Reminders) Reminders.start();
 }
 
 // ========== 仪表盘渲染 ==========
 async function renderDashboard() {
   try {
-    const stats = await window.Db.getDashboardStats();
+    const stats = await Db.getDashboardStats();
     renderPlatformCards(stats.accounts, stats.monthPublishedByPlatform);
     renderStats(stats);
     renderAlerts();
@@ -172,7 +173,7 @@ async function renderRecentViral() {
   const wrap = $("recentViral");
   if (!wrap) return;
   try {
-    const items = await window.Db.list("metrics", {
+    const items = await Db.list("metrics", {
       select: "id, content_id, platform, views, likes, favorites, comments, is_viral, recorded_at",
       eq: { is_viral: true },
       order: { col: "recorded_at", ascending: false },
@@ -189,7 +190,7 @@ async function renderRecentViral() {
     // 批量加载内容标题
     const contentIds = [...new Set(items.map(m => m.content_id).filter(Boolean))];
     const contents = contentIds.length > 0
-      ? await window.Db.listByIds("contents", contentIds, { select: "id, title" })
+      ? await Db.listByIds("contents", contentIds, { select: "id, title" })
       : [];
     const titleMap = {};
     contents.forEach(c => { titleMap[c.id] = c.title; });
@@ -220,7 +221,7 @@ async function renderRecentPending() {
   if (!wrap) return;
   try {
     const now = new Date().toISOString();
-    const items = await window.Db.list("schedules", {
+    const items = await Db.list("schedules", {
       select: "id, content_id, platform, scheduled_at, actual_published_at",
       gte: { scheduled_at: now },
       order: { col: "scheduled_at", ascending: true },
@@ -237,7 +238,7 @@ async function renderRecentPending() {
     // 批量加载内容标题
     const contentIds = [...new Set(items.map(s => s.content_id).filter(Boolean))];
     const contents = contentIds.length > 0
-      ? await window.Db.listByIds("contents", contentIds, { select: "id, title" })
+      ? await Db.listByIds("contents", contentIds, { select: "id, title" })
       : [];
     const titleMap = {};
     contents.forEach(c => { titleMap[c.id] = c.title; });
@@ -324,7 +325,7 @@ async function renderAlerts() {
   const wrap = $("alertList");
   const alertCountEl = $("alertCount");
   try {
-    const alerts = await window.Db.getAlerts();
+    const alerts = await Db.getAlerts();
     const items = [];
 
     alerts.draftStale.forEach((d) => {
@@ -399,27 +400,21 @@ async function switchPage(pageName) {
   });
 
   // 模块懒加载渲染
+  const PAGE_MODULES = {
+    "hot-radar": "HotRadar",
+    "content": "ContentEditor",
+    "calendar": "Calendar",
+    "assets": "Assets",
+    "metrics": "Metrics",
+    "templates": "Templates",
+    "card-design": "CardDesign",
+    "video-script": "VideoScript",
+    "rules": "Rules",
+    "settings": "Settings",
+  };
   try {
-    if (pageName === "hot-radar" && window.HotRadar) {
-      await window.HotRadar.render();
-    } else if (pageName === "content" && window.ContentEditor) {
-      await window.ContentEditor.render();
-    } else if (pageName === "calendar" && window.Calendar) {
-      await window.Calendar.render();
-    } else if (pageName === "assets" && window.Assets) {
-      await window.Assets.render();
-    } else if (pageName === "metrics" && window.Metrics) {
-      await window.Metrics.render();
-    } else if (pageName === "templates" && window.Templates) {
-      await window.Templates.render();
-    } else if (pageName === "card-design" && window.CardDesign) {
-      await window.CardDesign.render();
-    } else if (pageName === "video-script" && window.VideoScript) {
-      await window.VideoScript.render();
-    } else if (pageName === "rules" && window.Rules) {
-      await window.Rules.render();
-    } else if (pageName === "settings" && window.Settings) {
-      await window.Settings.render();
+    if (PAGE_MODULES[pageName]) {
+      await WB.get(PAGE_MODULES[pageName]).render();
     } else if (pageName === "dashboard") {
       await renderDashboard();
     }
@@ -464,7 +459,7 @@ function initQuickActions() {
 async function testAiConnection(testPrompt) {
   toast("正在调用 AI...", 1500);
   try {
-    const text = await window.AiGateway.generate(testPrompt, {
+    const text = await AiGateway.generate(testPrompt, {
       system: "你是专业的内容运营助手，简洁回复。",
       maxTokens: 200,
     });
@@ -483,8 +478,8 @@ async function boot() {
   initQuickActions();
 
   // 若已配置且已登录，直接进入应用
-  if (window.WorkbenchConfig.isConfigured()) {
-    const user = await window.WorkbenchConfig.getCurrentUser();
+  if (WorkbenchConfig.isConfigured()) {
+    const user = await WorkbenchConfig.getCurrentUser();
     if (user) {
       await enterApp(user);
     }
@@ -492,3 +487,12 @@ async function boot() {
 }
 
 document.addEventListener("DOMContentLoaded", boot);
+
+  // 暴露 toast 供外部模块裸调用（toast 为 UI 辅助函数）
+  window.toast = toast;
+
+  return { boot, switchPage, toast };
+});
+
+// 立即实例化 App：注册 DOMContentLoaded 启动逻辑与全局 helper
+WB.get("App");

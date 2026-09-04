@@ -3,7 +3,8 @@
  * 功能：四平台合规规则查看 + 质检清单模板管理
  */
 
-const Rules = (function () {
+WB.define("Rules", ["Db"], (Db) => {
+  const Rules = (function () {
   const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
   const CATEGORIES = ["封面", "标题", "标签", "敏感词", "排版", "时长", "字幕", "图片", "简介"];
   const RISK_COLORS = { info: "tag", warning: "tag warn", danger: "tag danger" };
@@ -67,8 +68,8 @@ const Rules = (function () {
   async function loadData() {
     try {
       const [rules, qa] = await Promise.all([
-        window.Db.list("platform_rules", { order: { col: "category", ascending: true }, limit: 500 }),
-        window.Db.list("qa_checklist_templates", { order: { col: "sort_order", ascending: true }, limit: 500 }),
+        Db.list("platform_rules", { order: { col: "category", ascending: true }, limit: 500 }),
+        Db.list("qa_checklist_templates", { order: { col: "sort_order", ascending: true }, limit: 500 }),
       ]);
       rulesCache = rules;
       qaCache = qa;
@@ -144,6 +145,6 @@ const Rules = (function () {
   }
 
   return { render };
-})();
-
-window.Rules = Rules;
+  })();
+  return Rules;
+});

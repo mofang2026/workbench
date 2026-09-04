@@ -1,18 +1,18 @@
 /**
  * DB Gateway · 数据层统一接入
- * 封装 Supabase CRUD，所有页面通过 window.Db 调用
+ * 封装 Supabase CRUD，所有页面通过 WB.get('Db') 调用
  * 自动注入 user_id，遵循 RLS 策略
+ * 注册为 WB 模块，依赖 'WorkbenchConfig'
  */
-
-const Db = (function () {
+WB.define("Db", ["WorkbenchConfig"], (WorkbenchConfig) => {
   function client() {
-    const c = window.WorkbenchConfig.getSupabase();
+    const c = WorkbenchConfig.getSupabase();
     if (!c) throw new Error("Supabase 未配置，请先在登录页填写");
     return c;
   }
 
   async function uid() {
-    const u = await window.WorkbenchConfig.getCurrentUser();
+    const u = await WorkbenchConfig.getCurrentUser();
     if (!u) throw new Error("未登录");
     return u.id;
   }
@@ -235,6 +235,4 @@ const Db = (function () {
     getDashboardStats,
     getAlerts,
   };
-})();
-
-window.Db = Db;
+});

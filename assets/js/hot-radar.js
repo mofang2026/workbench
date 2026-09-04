@@ -8,7 +8,8 @@
  * 实时热点请通过「平台直通车」查看官方热榜。
  */
 
-const HotRadar = (function () {
+WB.define("HotRadar", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, ContentEditor) => {
+  const HotRadar = (function () {
   // 全平台热点直通车入口
   const HOTPORTALS = [
     { id: "weibo", name: "微博热搜", url: "https://s.weibo.com/top/summary", color: "#e6162d", icon: "🔥", desc: "实时热搜榜" },
@@ -166,7 +167,7 @@ ${JSON.stringify({
 
 只输出 JSON，topics 数组必须包含 8 个话题。`;
 
-      const text = await window.AiGateway.generate(prompt, {
+      const text = await AiGateway.generate(prompt, {
         system: "你是资深自媒体热点分析师和内容策划专家，擅长挖掘热点趋势并给出可执行的选题角度。",
         maxTokens: 2500,
       });
@@ -257,7 +258,7 @@ ${JSON.stringify({
     const t = lastResults[idx];
     if (!t) return;
     try {
-      await window.Db.create("topics", {
+      await Db.create("topics", {
         title: t.title,
         description: t.angle || t.reason || "",
         platform: platform,
@@ -282,7 +283,7 @@ ${JSON.stringify({
     let ok = 0;
     for (const t of lastResults) {
       try {
-        await window.Db.create("topics", {
+        await Db.create("topics", {
           title: t.title,
           description: t.angle || t.reason || "",
           platform: platform,
@@ -308,7 +309,7 @@ ${JSON.stringify({
     if (!t) return;
     try {
       // 1. 收录到选题库（状态设为创作中）
-      const topic = await window.Db.create("topics", {
+      const topic = await Db.create("topics", {
         title: t.title,
         description: t.angle || t.reason || "",
         platform: platform,
@@ -319,7 +320,7 @@ ${JSON.stringify({
         is_hot: true,
       });
       // 2. 创建内容草稿并关联选题
-      const content = await window.Db.create("contents", {
+      const content = await Db.create("contents", {
         topic_id: topic.id,
         title: t.title,
         body: t.angle || t.reason || "",
@@ -329,13 +330,13 @@ ${JSON.stringify({
       toast("已创建内容草稿，跳转创作中心");
       // 3. 跳转内容创作页并打开草稿编辑器
       await window.switchPage("content");
-      window.ContentEditor.open(content.id);
+      ContentEditor.open(content.id);
     } catch (e) {
       toast("操作失败: " + e.message, 3000);
     }
   }
 
   return { render };
-})();
-
-window.HotRadar = HotRadar;
+  })();
+  return HotRadar;
+});
