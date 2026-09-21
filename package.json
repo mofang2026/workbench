@@ -14,9 +14,6 @@
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.4"
-  },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
     "vercel": "^32.0.0"
