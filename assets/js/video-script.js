@@ -5,14 +5,18 @@
  * - 分镜表 + 时长统计 + 导出
  */
 
-WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
+WB.define("VideoScript", ["Db", "AiGateway", "Platforms"], (Db, AiGateway) => {
   const VideoScript = (function () {
   const SCRIPT_TYPES = {
-    short: { name: "短视频脚本", duration: "30-60s", platforms: ["抖音", "小红书"], desc: "节奏快、前3秒抓人、强互动结尾" },
-    oral: { name: "口播视频脚本", duration: "2-5min", platforms: ["抖音", "B站", "公众号"], desc: "信息密度高、逻辑清晰、金句穿插" },
-    vlog: { name: "Vlog 脚本", duration: "3-8min", platforms: ["B站", "小红书"], desc: "生活记录、多场景切换、情绪递进" },
-    tutorial: { name: "教程脚本", duration: "5-15min", platforms: ["B站", "公众号"], desc: "步骤清晰、操作演示、重点标注" },
+    short: { name: "短视频脚本", duration: "30-60s", platforms: ["douyin", "xhs"], desc: "节奏快、前3秒抓人、强互动结尾" },
+    oral: { name: "口播视频脚本", duration: "2-5min", platforms: ["douyin", "bilibili", "wechat"], desc: "信息密度高、逻辑清晰、金句穿插" },
+    vlog: { name: "Vlog 脚本", duration: "3-8min", platforms: ["bilibili", "xhs"], desc: "生活记录、多场景切换、情绪递进" },
+    tutorial: { name: "教程脚本", duration: "5-15min", platforms: ["bilibili", "wechat"], desc: "步骤清晰、操作演示、重点标注" },
   };
+
+  // 平台显示名解析：key -> 中文名；遗留的中文名原样返回（保证旧数据可读）
+  const P = WB.get("Platforms");
+  const platformLabel = (v) => P.NAMES[v] || v;
 
   let currentScript = null;
   let scriptsCache = [];
@@ -77,7 +81,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
           <div class="list-item-meta">
             <span>⏱ ${s.duration || typeInfo.duration}</span>
             <span>🎬 ${shotCount} 个分镜</span>
-            ${s.platform ? `<span>📱 ${escapeHtml(s.platform)}</span>` : ""}
+            ${s.platform ? `<span>📱 ${escapeHtml(platformLabel(s.platform))}</span>` : ""}
             <span>· ${formatDate(s.updated_at)}</span>
           </div>
           <div class="list-item-actions">
@@ -110,7 +114,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
               <div class="vs-type-name">${t.name}</div>
               <div class="text-xs muted">${t.duration}</div>
               <div class="text-xs muted-2 mt-xs">${t.desc}</div>
-              <div class="text-xs muted-2 mt-xs">适合：${t.platforms.join(" / ")}</div>
+              <div class="text-xs muted-2 mt-xs">适合：${t.platforms.map(platformLabel).join(" / ")}</div>
             </label>
           `).join("")}
         </div>
@@ -124,14 +128,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
         <div class="field">
           <label class="field-label">目标平台</label>
           <select id="vsPlatform" class="select">
-            <option value="抖音">抖音</option>
-            <option value="小红书">小红书</option>
-            <option value="B站">B站</option>
-            <option value="公众号">公众号</option>
-            <option value="视频号">视频号</option>
-            <option value="快手">快手</option>
-            <option value="微博">微博</option>
-            <option value="今日头条">今日头条</option>
+            ${WB.get("Platforms").LIST.map((p) => `<option value="${p.key}">${p.name}</option>`).join("")}
           </select>
         </div>
       </div>
@@ -269,7 +266,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
       <div class="vs-detail-meta mb-md">
         <span class="tag">${typeInfo.name}</span>
         <span class="text-xs muted">⏱ 目标 ${s.duration} · 实际约 ${totalSec}s</span>
-        <span class="text-xs muted">📱 ${escapeHtml(s.platform || "")}</span>
+        <span class="text-xs muted">📱 ${escapeHtml(platformLabel(s.platform || ""))}</span>
       </div>
 
       ${s.hook ? `
@@ -328,7 +325,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
     const typeInfo = SCRIPT_TYPES[s.type] || { name: s.type };
     const totalSec = (s.shots || []).reduce((sum, sh) => sum + (parseInt(sh.duration_sec) || 0), 0);
     let text = `# ${s.title}\n\n`;
-    text += `类型：${typeInfo.name}\n平台：${s.platform}\n目标时长：${s.duration}（实际约 ${totalSec}s）\n\n`;
+    text += `类型：${typeInfo.name}\n平台：${platformLabel(s.platform)}\n目标时长：${s.duration}（实际约 ${totalSec}s）\n\n`;
     if (s.hook) text += `## 🔥 前3秒 Hook\n${s.hook}\n\n`;
     text += `## 分镜表\n\n`;
     (s.shots || []).forEach(sh => {

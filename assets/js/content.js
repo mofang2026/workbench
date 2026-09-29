@@ -6,7 +6,7 @@
  * - AI 内容打分 + 质检清单
  */
 
-WB.define("ContentEditor", ["Topics", "Keywords", "Db", "WorkbenchConfig", "AiGateway", "Calendar"], (Topics, Keywords, Db, WorkbenchConfig, AiGateway, Calendar) => {
+WB.define("ContentEditor", ["Topics", "Keywords", "Db", "WorkbenchConfig", "AiGateway", "Calendar", "Platforms"], (Topics, Keywords, Db, WorkbenchConfig, AiGateway, Calendar) => {
   const ContentEditor = (function () {
   const PLATFORMS = {
     xhs: {
@@ -1184,7 +1184,7 @@ ${bodyHtml}
     const count = parseInt($("tlCount").value) || 8;
     if (!topic) { toast("请填写内容主题"); return; }
 
-    const platformName = { all: "通用", xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号" }[platform];
+    const platformName = WB.get("Platforms").NAMES[platform] || platform;
     const status = $("tlGenStatus");
     const result = $("tlGenResult");
     const btn = $("btnTlGen");
@@ -1390,7 +1390,7 @@ ${bodyHtml}
             <tr>
               <td>${i === 0 ? '<span class="tag ok">冠军</span>' : i + 1}</td>
               <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.title)}</td>
-              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${{ xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" }[r.platform]}</span></td>
+              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${WB.get("Platforms").NAMES[r.platform] || r.platform}</span></td>
               <td>${r.views}</td>
               <td>${r.eng}</td>
               <td style="color:${parseFloat(r.engRate) >= 5 ? "var(--ok)" : parseFloat(r.engRate) >= 2 ? "var(--warn)" : "var(--muted)"};">${r.engRate}%</td>
@@ -1556,7 +1556,7 @@ ${bodyHtml}
 
   function renderComplianceReport(report) {
     const riskColor = report.overall_risk === "高" ? "var(--danger)" : report.overall_risk === "中" ? "var(--warn)" : "var(--ok)";
-    const platformIcons = { xhs: "📕", douyin: "🎵", bilibili: "📺", wechat: "💬", shipinhao: "▶️", kuaishou: "📱", weibo: "🧣", toutiao: "📰" };
+    const platformIcons = WB.get("Platforms").ICONS;
 
     return `
       <div class="editor-section compliance-report">

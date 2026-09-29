@@ -298,6 +298,81 @@ begin
 end$$;
 
 -- ============================================================================
+-- 关键词管理表 / 视频脚本表 / contents.compliance_report
+-- 说明：此前这三处定义只存在于各自 migration_*.sql，导致 schema.sql 单跑不完整。
+--       此处折回，使 schema.sql 成为完整基准；platform CHECK 仍由下方「平台扩展迁移」统一刷新。
+-- ============================================================================
+
+-- 关键词管理表
+create table if not exists public.keywords (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  word text not null,
+  category text,
+  platform text check (platform in ('xhs','douyin','bilibili','wechat','all')),
+  track text,
+  hot_score int default 0,
+  status text default 'active' check (status in ('active','watching','deprecated')),
+  source text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists uq_keywords_user_word_platform
+  on public.keywords(user_id, word, coalesce(platform, 'all'));
+create index if not exists idx_keywords_user on public.keywords(user_id);
+create index if not exists idx_keywords_category on public.keywords(user_id, category);
+
+alter table public.keywords enable row level security;
+drop policy if exists "keywords_owner_all" on public.keywords;
+create policy "keywords_owner_all" on public.keywords
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop trigger if exists trg_keywords_touch on public.keywords;
+create trigger trg_keywords_touch
+  before update on public.keywords
+  for each row execute function public.touch_updated_at();
+
+-- 视频脚本表
+create table if not exists public.video_scripts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  title text not null default '',
+  type text not null default 'short',
+  duration text default '',
+  platform text default '',
+  hook text default '',
+  shots jsonb default '[]'::jsonb,
+  ending text default '',
+  summary text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.video_scripts enable row level security;
+drop policy if exists "用户管理自己的视频脚本" on public.video_scripts;
+create policy "用户管理自己的视频脚本"
+  on public.video_scripts for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop trigger if exists trg_video_scripts_updated on public.video_scripts;
+create trigger trg_video_scripts_updated
+  before update on public.video_scripts
+  for each row execute function public.touch_updated_at();
+
+-- contents 表 AI 违规自检报告字段
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'contents' and column_name = 'compliance_report'
+  ) then
+    alter table public.contents add column compliance_report jsonb;
+  end if;
+end $$;
+
+-- ============================================================================
 -- 平台扩展迁移：新增 视频号(shipinhao)/快手(kuaishou)/微博(weibo)/今日头条(toutiao)
 -- 动态删除旧的 platform CHECK 约束并重建为含新平台的版本（自包含，可重复执行）
 -- ============================================================================

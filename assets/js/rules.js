@@ -5,7 +5,7 @@
 
 WB.define("Rules", ["Db"], (Db) => {
   const Rules = (function () {
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
+  const PLATFORMS = WB.get("Platforms").NAMES;
   const CATEGORIES = ["封面", "标题", "标签", "敏感词", "排版", "时长", "字幕", "图片", "简介"];
   const RISK_COLORS = { info: "tag", warning: "tag warn", danger: "tag danger" };
   const RISK_LABELS = { info: "提示", warning: "警告", danger: "危险" };

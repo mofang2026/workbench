@@ -5,7 +5,7 @@
  * - 一键转为内容创作
  */
 
-WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, ContentEditor) => {
+WB.define("Topics", ["AiGateway", "Db", "ContentEditor", "Platforms"], (AiGateway, Db, ContentEditor) => {
   const Topics = (function () {
   const STATUS_FLOW = [
     { key: "idea", label: "灵感储备" },
@@ -15,9 +15,7 @@ WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, Conten
     { key: "abandoned", label: "废弃" },
   ];
 
-  const PLATFORM_LABELS = {
-    xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "全域",
-  };
+  const PLATFORM_LABELS = WB.get("Platforms").NAMES;
 
   let listData = [];
   let filterStatus = "all";
@@ -28,6 +26,7 @@ WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, Conten
   async function render(opts) {
     opts = opts || {};
     const wrap = opts.wrapper || $("page-topics");
+    if (!wrap) { wrap = document.createElement("div"); document.body.appendChild(wrap); }
     const hero = opts.noHero ? "" : `
       <div class="hero">
         <p class="eyebrow muted-2 text-xs">TOPICS · 选题灵感库</p>

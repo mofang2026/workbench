@@ -5,12 +5,31 @@
  * 支持多提供商（DeepSeek/智谱AI/Kimi/自定义）+ 故障转移
  */
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Api-Key",
-  "Access-Control-Max-Age": "86400",
-};
+function getCorsHeaders() {
+  // 生产环境建议设置 ALLOWED_ORIGIN 收窄来源；未设置时回退为 *
+  const origin = process.env.ALLOWED_ORIGIN || "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Api-Key",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+
+// ---- 简易按 IP 限流（固定窗口，默认 120 次/分钟；RATE_LIMIT_DISABLED=1 关闭）----
+const _rateBuckets = new Map();
+function rateLimited(ip) {
+  if (process.env.RATE_LIMIT_DISABLED === "1") return false;
+  const limit = parseInt(process.env.RATE_LIMIT_PER_MIN || "120", 10);
+  const now = Date.now();
+  const b = _rateBuckets.get(ip);
+  if (!b || now > b.resetAt) {
+    _rateBuckets.set(ip, { count: 1, resetAt: now + 60000 });
+    return false;
+  }
+  b.count += 1;
+  return b.count > limit;
+}
 
 /**
  * 共享密钥鉴权
@@ -115,7 +134,7 @@ function getProviders() {
 function sendJson(res, body, status) {
   res.statusCode = status || 200;
   res.setHeader("Content-Type", "application/json");
-  for (const [k, v] of Object.entries(CORS_HEADERS)) {
+  for (const [k, v] of Object.entries(getCorsHeaders())) {
     res.setHeader(k, v);
   }
   res.end(JSON.stringify(body));
@@ -131,7 +150,7 @@ function buildMessages(prompt, system) {
 module.exports = async (req, res) => {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
-    for (const [k, v] of Object.entries(CORS_HEADERS)) {
+    for (const [k, v] of Object.entries(getCorsHeaders())) {
       res.setHeader(k, v);
     }
     res.end();
@@ -146,6 +165,14 @@ module.exports = async (req, res) => {
   const auth = authorize(req);
   if (!auth.ok) {
     return sendJson(res, { error: auth.message }, auth.code);
+  }
+
+  const clientIp =
+    (req.headers["x-forwarded-for"] && req.headers["x-forwarded-for"].split(",")[0].trim()) ||
+    req.socket.remoteAddress ||
+    "unknown";
+  if (rateLimited(clientIp)) {
+    return sendJson(res, { error: "请求过于频繁，请稍后再试" }, 429);
   }
 
   let body;
@@ -167,38 +194,46 @@ module.exports = async (req, res) => {
     return sendJson(res, { error: "服务端未配置任何 AI 提供商的环境变量" }, 500);
   }
 
-  // 流式只尝试第一个可用提供商（SSE 开始后无法切换）
-  const provider = providers[0];
-  const model = useReasoner ? provider.reasonerModel : provider.model;
+  // 流式：在 SSE 开始写入前逐 provider 故障转移（SSE 开始后因单工无法切换，
+  // 故仅在拿到首个可用 upstream 之前切换；首个可用 provider 失败则整体失败）
+  let lastErr = null;
+  for (const provider of providers) {
+    const model = useReasoner ? provider.reasonerModel : provider.model;
+    const reqBody = {
+      model,
+      messages: buildMessages(prompt, system),
+      stream: true,
+      temperature: temperature != null ? temperature : 0.7,
+      max_tokens: maxTokens != null ? maxTokens : 2048,
+    };
 
-  const reqBody = {
-    model,
-    messages: buildMessages(prompt, system),
-    stream: true,
-    temperature: temperature != null ? temperature : 0.7,
-    max_tokens: maxTokens != null ? maxTokens : 2048,
-  };
-
-  try {
-    const upstream = await fetch(`${provider.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider.apiKey}`,
-      },
-      body: JSON.stringify(reqBody),
-    });
+    let upstream;
+    try {
+      upstream = await fetch(`${provider.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify(reqBody),
+      });
+    } catch (e) {
+      lastErr = `${provider.name}: ${e.message}`;
+      continue; // 网络/连接错误，尝试下一个提供商
+    }
 
     if (!upstream.ok) {
       const t = await upstream.text();
-      return sendJson(res, { error: `${provider.name} ${upstream.status}: ${t.slice(0, 200)}` }, 502);
+      lastErr = `${provider.name} ${upstream.status}: ${t.slice(0, 200)}`;
+      continue; // 该提供商不可用，故障转移
     }
 
+    // 成功拿到可用 upstream，开始 SSE 流式转发
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
-    for (const [k, v] of Object.entries(CORS_HEADERS)) {
+    for (const [k, v] of Object.entries(getCorsHeaders())) {
       res.setHeader(k, v);
     }
 
@@ -234,10 +269,12 @@ module.exports = async (req, res) => {
       }
     }
     res.end();
-  } catch (e) {
-    if (!res.headersSent) {
-      return sendJson(res, { error: e.message || "未知错误" }, 500);
-    }
-    res.end();
+    return;
   }
+
+  // 所有 provider 均失败
+  if (!res.headersSent) {
+    return sendJson(res, { error: `所有提供商均失败: ${lastErr || "未知错误"}` }, 502);
+  }
+  res.end();
 };

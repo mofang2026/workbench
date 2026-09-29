@@ -16,3 +16,6 @@ dist/
 
 # Playwright CLI 临时文件
 .playwright-cli/
+
+# 本地部署凭据（不入库；参考 deploy/secrets.local.example.json）
+deploy/secrets.local.json

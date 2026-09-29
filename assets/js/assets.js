@@ -4,7 +4,7 @@
  * 功能：CRUD + 标签检索 + 平台筛选 + 收藏 + 一键复制/插入
  */
 
-WB.define("Assets", ["Db", "AiGateway"], (Db, AiGateway) => {
+WB.define("Assets", ["Db", "AiGateway", "Platforms"], (Db, AiGateway) => {
   const Assets = (function () {
   const TYPES = {
     cover: { name: "封面图", icon: "🖼️" },
@@ -15,7 +15,7 @@ WB.define("Assets", ["Db", "AiGateway"], (Db, AiGateway) => {
     quote: { name: "文案金句", icon: "✍️" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
+  const PLATFORMS = WB.get("Platforms").NAMES;
 
   let cache = [];
   let filterType = "all";

@@ -10,6 +10,7 @@ workbench 部署脚本 - 通过 SSH/SFTP 直传到阿里云 ECS 服务器（域�
 前置: 需 paramiko (pip install paramiko)；SSH 私钥 ~/.ssh/shuncheng_rsa
 """
 import argparse
+import json
 import os
 import sys
 import time
@@ -21,11 +22,37 @@ except ImportError:
     print("缺少 paramiko，请先安装：pip install paramiko")
     sys.exit(1)
 
-# ===== 服务器配置（与灵序同一台 ECS） =====
-SERVER_IP = "39.97.226.47"
-SSH_PORT = 22
-SSH_USER = "root"
-SSH_KEY_PATH = os.path.expanduser("~/.ssh/shuncheng_rsa")
+# ===== 服务器配置（不在此硬编码；优先环境变量，其次 deploy/secrets.local.json，均不入库） =====
+def _load_server_config():
+    """从环境变量或本地未跟踪配置读取部署凭据，避免真实服务器信息进入版本库。"""
+    cfg = {
+        "SERVER_IP": os.environ.get("WB_SERVER_IP"),
+        "SSH_PORT": os.environ.get("WB_SSH_PORT", "22"),
+        "SSH_USER": os.environ.get("WB_SSH_USER", "root"),
+        "SSH_KEY_PATH": os.environ.get("WB_SSH_KEY_PATH")
+        or os.path.expanduser("~/.ssh/shuncheng_rsa"),
+    }
+    if not cfg["SERVER_IP"]:
+        local = Path(__file__).resolve().parent / "secrets.local.json"
+        if local.is_file():
+            try:
+                data = json.loads(local.read_text(encoding="utf-8"))
+                cfg["SERVER_IP"] = cfg["SERVER_IP"] or data.get("SERVER_IP")
+                cfg["SSH_PORT"] = cfg["SSH_PORT"] or data.get("SSH_PORT", "22")
+                cfg["SSH_USER"] = cfg["SSH_USER"] or data.get("SSH_USER", "root")
+                cfg["SSH_KEY_PATH"] = cfg["SSH_KEY_PATH"] or data.get(
+                    "SSH_KEY_PATH", os.path.expanduser("~/.ssh/shuncheng_rsa")
+                )
+            except Exception:
+                pass
+    return cfg
+
+
+_CFG = _load_server_config()
+SERVER_IP = _CFG["SERVER_IP"]
+SSH_PORT = int(_CFG["SSH_PORT"])
+SSH_USER = _CFG["SSH_USER"]
+SSH_KEY_PATH = _CFG["SSH_KEY_PATH"]
 
 # ===== 部署目标配置 =====
 PROJECT_ROOT = Path(__file__).resolve().parent.parent   # workbench 工程根（deploy/ 的上一级）
@@ -43,6 +70,11 @@ API_FILES = ["server.js"]
 
 
 def ssh_connect():
+    if not SERVER_IP:
+        sys.exit(
+            "!! 未配置服务器 IP：请设置环境变量 WB_SERVER_IP，或创建 deploy/secrets.local.json"
+            "（参考 deploy/secrets.local.example.json）。该文件不入库。"
+        )
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(SERVER_IP, port=SSH_PORT, username=SSH_USER,

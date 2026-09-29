@@ -6,19 +6,18 @@
  * - 快捷操作
  */
 
-WB.define("App", ["WorkbenchConfig", "Db", "Reminders", "AiGateway"], (WorkbenchConfig, Db, Reminders, AiGateway) => {
+WB.define("App", ["WorkbenchConfig", "Db", "Reminders", "AiGateway", "Platforms"], (WorkbenchConfig, Db, Reminders, AiGateway) => {
 const $ = (id) => document.getElementById(id);
 
-const PLATFORM_META = {
-  xhs:      { name: "小红书",   color: "xhs",      url: "https://creator.xiaohongshu.com" },
-  douyin:   { name: "抖音",     color: "douyin",   url: "https://creator.douyin.com" },
-  bilibili: { name: "B站",      color: "bilibili", url: "https://member.bilibili.com" },
-  wechat:   { name: "公众号",   color: "wechat",   url: "https://mp.weixin.qq.com" },
-  shipinhao:{ name: "视频号",   color: "shipinhao",url: "https://channels.weixin.qq.com/platform/post/create" },
-  kuaishou: { name: "快手",     color: "kuaishou", url: "https://cp.kuaishou.com/article/publish" },
-  weibo:    { name: "微博",     color: "weibo",    url: "https://weibo.com/compose/newwrite" },
-  toutiao:  { name: "今日头条", color: "toutiao",  url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
-};
+// 由单一事实来源 Platforms 派生（保留 color=key 作为 CSS class 的既有约定）
+const PLATFORM_META = {};
+WB.get("Platforms").KEYS.forEach((k) => {
+  PLATFORM_META[k] = {
+    name: WB.get("Platforms").NAMES[k],
+    color: k,
+    url: WB.get("Platforms").MAP[k].url,
+  };
+});
 
 // ========== Toast ==========
 function toast(msg, duration = 2200) {
@@ -403,6 +402,8 @@ async function switchPage(pageName) {
   const PAGE_MODULES = {
     "hot-radar": "HotRadar",
     "content": "ContentEditor",
+    "topics": "Topics",
+    "keywords": "Keywords",
     "calendar": "Calendar",
     "assets": "Assets",
     "metrics": "Metrics",

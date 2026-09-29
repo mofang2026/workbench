@@ -3,9 +3,9 @@
  * 功能：单篇数据录入 + 爆款/踩坑标记 + 维度统计 + 优质/低效筛选 + AI 周月报告
  */
 
-WB.define("Metrics", ["Db", "AiGateway"], (Db, AiGateway) => {
+WB.define("Metrics", ["Db", "AiGateway", "Platforms"], (Db, AiGateway) => {
   const Metrics = (function () {
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
+  const PLATFORMS = WB.get("Platforms").NAMES;
   let cache = [];
   let contentsMap = {};
   let activeView = "list"; // list | stats
@@ -409,7 +409,7 @@ WB.define("Metrics", ["Db", "AiGateway"], (Db, AiGateway) => {
     if (!ctx || !window.Chart) return;
 
     const labels = Object.keys(byPlatform).map(k => PLATFORMS[k] || k);
-    const platformColors = { xhs: "#ff2442", douyin: "#25f4ee", bilibili: "#fb7299", wechat: "#07c160", shipinhao: "#fa9d3b", kuaishou: "#ff6900", weibo: "#e6162d", toutiao: "#f04142" };
+    const platformColors = WB.get("Platforms").COLORS;
     const colors = Object.keys(byPlatform).map(k => platformColors[k] || "#59c4ff");
 
     chartInstances.platform = new Chart(ctx, {
@@ -764,7 +764,7 @@ WB.define("Metrics", ["Db", "AiGateway"], (Db, AiGateway) => {
       </div>
       <p class="text-xs muted" style="margin:0 0 12px; line-height:1.6;">
         支持从「导出 CSV」导出的文件，或下载模板后填写。标题会尝试自动匹配已发布内容。<br/>
-        平台支持：小红书 / 抖音 / B站 / 公众号；爆款/踩坑填「是」或留空。
+        平台支持：小红书 / 抖音 / B站 / 公众号 / 视频号 / 快手 / 微博 / 今日头条；爆款/踩坑填「是」或留空。
       </p>
       <div class="field">
         <label class="field-label">选择 CSV 文件</label>
@@ -966,14 +966,18 @@ WB.define("Metrics", ["Db", "AiGateway"], (Db, AiGateway) => {
     return { rows, warnings };
   }
 
-  // 平台别名 → 标准 key
+  // 平台别名 → 标准 key（覆盖全部 8 个平台，与 platforms.js 的 KEYS 对齐）
   function mapPlatform(p) {
     const s = (p || "").trim().toLowerCase();
     const map = {
-      xhs: "xhs", 小红书: "xhs", rednote: "xhs",
+      xhs: "xhs", 小红书: "xhs", rednote: "xhs", xiaohongshu: "xhs",
       douyin: "douyin", 抖音: "douyin", tiktok: "douyin",
       bilibili: "bilibili", b站: "bilibili", bzhan: "bilibili", 哔哩哔哩: "bilibili",
       wechat: "wechat", 公众号: "wechat", 微信: "wechat", weixin: "wechat",
+      shipinhao: "shipinhao", 视频号: "shipinhao", channels: "shipinhao",
+      kuaishou: "kuaishou", 快手: "kuaishou", ks: "kuaishou",
+      weibo: "weibo", 微博: "weibo",
+      toutiao: "toutiao", 今日头条: "toutiao", toutiaohao: "toutiao",
     };
     return map[s] || null;
   }

@@ -6,18 +6,9 @@
  * - 标记已发布
  */
 
-WB.define("Calendar", ["Db"], (Db) => {
+WB.define("Calendar", ["Db", "Platforms"], (Db) => {
   const Calendar = (function () {
-  const PLATFORMS = {
-    xhs: { name: "小红书", url: "https://creator.xiaohongshu.com/publish/publish" },
-    douyin: { name: "抖音", url: "https://creator.douyin.com/creator-micro/content/upload" },
-    bilibili: { name: "B站", url: "https://member.bilibili.com/platform/upload/text/edit" },
-    wechat: { name: "公众号", url: "https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=add&type=10" },
-    shipinhao: { name: "视频号", url: "https://channels.weixin.qq.com/platform/post/create" },
-    kuaishou: { name: "快手", url: "https://cp.kuaishou.com/article/publish" },
-    weibo: { name: "微博", url: "https://weibo.com/compose/newwrite" },
-    toutiao: { name: "今日头条", url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
-  };
+  const PLATFORMS = WB.get("Platforms").MAP;
 
   const WEEK_HEADS = ["日", "一", "二", "三", "四", "五", "六"];
 
