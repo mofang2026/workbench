@@ -3,9 +3,9 @@
  * 功能：四平台合规规则查看 + 质检清单模板管理
  */
 
-WB.define("Rules", ["Db"], (Db) => {
+WB.define("Rules", ["Db", "Platforms"], (Db, Platforms) => {
   const Rules = (function () {
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" };
+  const PLATFORMS = Platforms.labels(false);
   const CATEGORIES = ["封面", "标题", "标签", "敏感词", "排版", "时长", "字幕", "图片", "简介"];
   const RISK_COLORS = { info: "tag", warning: "tag warn", danger: "tag danger" };
   const RISK_LABELS = { info: "提示", warning: "警告", danger: "危险" };

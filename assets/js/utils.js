@@ -49,6 +49,12 @@ WB.define("utils", () => {
     return local.toISOString().slice(0, 16);
   }
 
+  function formatNum(n) {
+    if (n >= 10000) return (n / 10000).toFixed(1) + "w";
+    if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+    return String(n || 0);
+  }
+
   // 尝试解析 JSON（容错：提取字符串中的 JSON 片段）
   function tryParseJson(text) {
     if (!text) return null;
@@ -136,6 +142,7 @@ WB.define("utils", () => {
     formatDate,
     formatDateTime,
     formatDateTimeLocal,
+    formatNum,
     tryParseJson,
     showModal,
     closeModal,

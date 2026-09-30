@@ -6,7 +6,7 @@
  * - 批量导入
  */
 
-WB.define("Keywords", ["Db"], (Db) => {
+WB.define("Keywords", ["Db", "Platforms"], (Db, Platforms) => {
   const Keywords = (function () {
   const CATEGORIES = {
     industry: { name: "行业词", color: "brand" },
@@ -22,7 +22,7 @@ WB.define("Keywords", ["Db"], (Db) => {
     deprecated: { label: "已废弃", cls: "archived" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
+  const PLATFORMS = Platforms.labels(true);
 
   let cache = [];
   let filterCategory = "all";

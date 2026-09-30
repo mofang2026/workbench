@@ -4,7 +4,7 @@
  * 功能：CRUD + 分类筛选 + 一键复制 + 内置模板
  */
 
-WB.define("Templates", ["Db", "AiGateway"], (Db, AiGateway) => {
+WB.define("Templates", ["Db", "AiGateway", "Platforms"], (Db, AiGateway, Platforms) => {
   const Templates = (function () {
   const TYPES = {
     layout: { name: "排版模板", icon: "📐" },
@@ -15,7 +15,7 @@ WB.define("Templates", ["Db", "AiGateway"], (Db, AiGateway) => {
     tag_combo: { name: "标签组合", icon: "#️⃣" },
   };
 
-  const PLATFORMS = { xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "通用" };
+  const PLATFORMS = Platforms.labels(true);
 
   let cache = [];
   let filterType = "all";

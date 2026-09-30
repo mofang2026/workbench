@@ -5,7 +5,7 @@
  * - 一键转为内容创作
  */
 
-WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, ContentEditor) => {
+WB.define("Topics", ["AiGateway", "Db", "ContentEditor", "Platforms"], (AiGateway, Db, ContentEditor, Platforms) => {
   const Topics = (function () {
   const STATUS_FLOW = [
     { key: "idea", label: "灵感储备" },
@@ -15,9 +15,7 @@ WB.define("Topics", ["AiGateway", "Db", "ContentEditor"], (AiGateway, Db, Conten
     { key: "abandoned", label: "废弃" },
   ];
 
-  const PLATFORM_LABELS = {
-    xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条", all: "全域",
-  };
+  const PLATFORM_LABELS = Platforms.labels(true, "全域");
 
   let listData = [];
   let filterStatus = "all";

@@ -6,19 +6,11 @@
  * - 快捷操作
  */
 
-WB.define("App", ["WorkbenchConfig", "Db", "Reminders", "AiGateway"], (WorkbenchConfig, Db, Reminders, AiGateway) => {
+WB.define("App", ["WorkbenchConfig", "Db", "Reminders", "AiGateway", "Platforms"], (WorkbenchConfig, Db, Reminders, AiGateway, Platforms) => {
 const $ = (id) => document.getElementById(id);
 
-const PLATFORM_META = {
-  xhs:      { name: "小红书",   color: "xhs",      url: "https://creator.xiaohongshu.com" },
-  douyin:   { name: "抖音",     color: "douyin",   url: "https://creator.douyin.com" },
-  bilibili: { name: "B站",      color: "bilibili", url: "https://member.bilibili.com" },
-  wechat:   { name: "公众号",   color: "wechat",   url: "https://mp.weixin.qq.com" },
-  shipinhao:{ name: "视频号",   color: "shipinhao",url: "https://channels.weixin.qq.com/platform/post/create" },
-  kuaishou: { name: "快手",     color: "kuaishou", url: "https://cp.kuaishou.com/article/publish" },
-  weibo:    { name: "微博",     color: "weibo",    url: "https://weibo.com/compose/newwrite" },
-  toutiao:  { name: "今日头条", color: "toutiao",  url: "https://mp.toutiao.com/profile_v4/graphic/publish" },
-};
+// 平台名与主页地址来自 Platforms 注册表；卡片样式类名直接用 key（对应 styles.css 的 --<key> 变量）
+const PLATFORM_META = Platforms.indexed("home");
 
 // ========== Toast ==========
 function toast(msg, duration = 2200) {
@@ -291,7 +283,7 @@ function renderPlatformCards(accounts, monthPublishedByPlatform = {}) {
     const monthPub = monthPublishedByPlatform[key] || 0;
 
     const card = document.createElement("div");
-    card.className = `platform-card ${meta.color}`;
+    card.className = `platform-card ${key}`;
     card.innerHTML = `
       <div class="platform-head">
         <span class="platform-name">${meta.name}</span>
@@ -372,11 +364,7 @@ async function renderAlerts() {
   }
 }
 
-function formatNum(n) {
-  if (n >= 10000) return (n / 10000).toFixed(1) + "w";
-  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
-  return String(n || 0);
-}
+// formatNum 由 utils 提供（app.js 里其他裸调用如 escapeHtml/formatDate 同源）
 
 // ========== 导航 ==========
 function initNav() {

@@ -6,66 +6,62 @@
  * - AI 内容打分 + 质检清单
  */
 
-WB.define("ContentEditor", ["Topics", "Keywords", "Db", "WorkbenchConfig", "AiGateway", "Calendar"], (Topics, Keywords, Db, WorkbenchConfig, AiGateway, Calendar) => {
+WB.define("ContentEditor", ["Topics", "Keywords", "Db", "WorkbenchConfig", "AiGateway", "Calendar", "Platforms"], (Topics, Keywords, Db, WorkbenchConfig, AiGateway, Calendar, Platforms) => {
   const ContentEditor = (function () {
-  const PLATFORMS = {
+  // 各平台的编辑器适配配置（名字来自 Platforms，这里只放本模块独有的字段定义）
+  const ADAPTATION = {
     xhs: {
-      name: "小红书",
       charLimit: 1000,
       fields: ["title", "body", "tags", "cover_text", "summary"],
       fieldLabels: { title: "标题（≤20字）", body: "正文", tags: "话题标签", cover_text: "首图文案", summary: "笔记摘要" },
       rewritePrompt: "改写为小红书风格：标题吸睛带emoji、段落短句化、正文口语化、3-5个话题标签、首图文案简洁有力、笔记摘要30字内。",
     },
     douyin: {
-      name: "抖音",
       charLimit: 2000,
       fields: ["title", "body", "shot_split", "duration", "top_comment", "hot_words"],
       fieldLabels: { title: "视频标题", body: "口播文案", shot_split: "镜头拆分", duration: "时长配置", top_comment: "置顶评论", hot_words: "话题热词" },
       rewritePrompt: "改写为抖音短视频脚本：口播文案节奏感强、镜头拆分按时间轴、时长配置合理、置顶评论引导互动、话题热词3-5个。",
     },
     bilibili: {
-      name: "B站",
       charLimit: 2000,
       fields: ["title", "body", "cover_text", "danmaku_keywords", "top_text", "partition"],
       fieldLabels: { title: "视频标题", body: "长简介", cover_text: "封面文案", danmaku_keywords: "弹幕关键词", top_text: "置顶文案", partition: "分区选择" },
       rewritePrompt: "改写为B站风格：标题有梗、长简介详尽、封面文案醒目、弹幕关键词3-5个、置顶文案互动、分区选择合适。",
     },
     wechat: {
-      name: "公众号",
       charLimit: 5000,
       fields: ["title", "body", "subtitle", "ending", "original_decl", "cover_text"],
       fieldLabels: { title: "标题", body: "正文", subtitle: "小标题优化", ending: "首尾引导", original_decl: "原创声明", cover_text: "封面图配置" },
       rewritePrompt: "改写为公众号风格：标题有信息量、正文长文排版、小标题层次清晰、首尾引导关注、原创声明规范、封面图配置说明。",
     },
     shipinhao: {
-      name: "视频号",
       charLimit: 1500,
       fields: ["title", "body", "shot_split", "duration", "hot_words"],
       fieldLabels: { title: "视频标题", body: "口播文案", shot_split: "镜头拆分", duration: "时长配置", hot_words: "话题热词" },
       rewritePrompt: "改写为视频号风格：接地气口语化、开头3秒抓眼球、镜头拆分清晰、时长合理、配合正能量话题热词3-5个。",
     },
     kuaishou: {
-      name: "快手",
       charLimit: 1500,
       fields: ["title", "body", "shot_split", "duration", "cover_text"],
       fieldLabels: { title: "视频标题", body: "口播文案", shot_split: "镜头拆分", duration: "时长配置", cover_text: "封面文案" },
       rewritePrompt: "改写为快手风格：老铁口语化、真实感强、开头冲突前置、镜头拆分接地气、封面文案吸睛。",
     },
     weibo: {
-      name: "微博",
       charLimit: 2000,
       fields: ["title", "body", "tags", "at_list", "summary"],
       fieldLabels: { title: "博文标题", body: "博文正文", tags: "话题标签", at_list: "@提及", summary: "导语摘要" },
       rewritePrompt: "改写为微博风格：简洁犀利有观点、开头抓热点、用2-3个#话题#、引导转发评论、@相关账号。",
     },
     toutiao: {
-      name: "今日头条",
       charLimit: 3000,
       fields: ["title", "body", "subtitle", "summary", "cover_text"],
       fieldLabels: { title: "标题", body: "正文", subtitle: "小标题优化", summary: "摘要", cover_text: "封面图配置" },
       rewritePrompt: "改写为今日头条风格：标题说清楚价值、正文信息密度高、小标题分层、摘要概括核心点、符合头条推荐机制。",
     },
   };
+
+  // 名字统一由 Platforms 提供；产出形状与重构前的 PLATFORMS 完全一致
+  const PLATFORMS = Platforms.decorate(ADAPTATION);
 
   const STATUS_FLOW = [
     { key: "draft", label: "草稿" },
@@ -1083,11 +1079,7 @@ ${bodyHtml}
           <div class="field">
             <label class="field-label">目标平台</label>
             <select id="tlPlatform" class="select">
-              <option value="all">通用</option>
-              <option value="xhs">小红书</option>
-              <option value="douyin">抖音</option>
-              <option value="bilibili">B站</option>
-              <option value="wechat">公众号</option>
+              ${Platforms.options(true).map(p => `<option value="${p.key}">${p.label}</option>`).join("")}
             </select>
           </div>
         </div>
@@ -1141,10 +1133,7 @@ ${bodyHtml}
         <div class="row gap-sm mb-md">
           <input id="abTitle" class="input" style="flex:1;" placeholder="输入标题..." />
           <select id="abPlatform" class="select" style="width:auto;">
-            <option value="xhs">小红书</option>
-            <option value="douyin">抖音</option>
-            <option value="bilibili">B站</option>
-            <option value="wechat">公众号</option>
+            ${Platforms.options(false).map(p => `<option value="${p.key}">${p.label}</option>`).join("")}
           </select>
           <input id="abViews" class="input" type="number" style="width:90px;" placeholder="阅读" />
           <input id="abEng" class="input" type="number" style="width:90px;" placeholder="互动" />
@@ -1184,7 +1173,9 @@ ${bodyHtml}
     const count = parseInt($("tlCount").value) || 8;
     if (!topic) { toast("请填写内容主题"); return; }
 
-    const platformName = { all: "通用", xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号" }[platform];
+    // 「全部平台」是筛选项，其余一律按 key 取名（此前这里只映射了 4 个平台，
+    // 视频号/快手/微博/头条 传进 prompt 的是 undefined）
+    const platformName = platform === Platforms.ALL_KEY ? Platforms.ALL_NAME : Platforms.name(platform);
     const status = $("tlGenStatus");
     const result = $("tlGenResult");
     const btn = $("btnTlGen");
@@ -1390,7 +1381,7 @@ ${bodyHtml}
             <tr>
               <td>${i === 0 ? '<span class="tag ok">冠军</span>' : i + 1}</td>
               <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.title)}</td>
-              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${{ xhs: "小红书", douyin: "抖音", bilibili: "B站", wechat: "公众号", shipinhao: "视频号", kuaishou: "快手", weibo: "微博", toutiao: "今日头条" }[r.platform]}</span></td>
+              <td><span class="tag" style="color:var(--${r.platform}); border-color:var(--${r.platform});">${Platforms.name(r.platform)}</span></td>
               <td>${r.views}</td>
               <td>${r.eng}</td>
               <td style="color:${parseFloat(r.engRate) >= 5 ? "var(--ok)" : parseFloat(r.engRate) >= 2 ? "var(--warn)" : "var(--muted)"};">${r.engRate}%</td>
@@ -1468,41 +1459,18 @@ ${bodyHtml}
 
   // ========== AI 违规自检（第二批） ==========
 
-  // 八大平台差异化检测重点
-  const COMPLIANCE_RULES = {
-    xhs: {
-      name: "小红书",
-      checks: ["标题是否含夸张/极限词（最/第一/绝对等）", "正文是否含导流信息（微信号/二维码描述）", "是否含医疗/金融等需资质话题", "图片描述是否涉及版权问题", "话题标签是否合规无违禁词"],
-    },
-    douyin: {
-      name: "抖音",
-      checks: ["口播文案是否含敏感政治词", "是否含低俗/擦边球内容描述", "话题热词是否含违禁词", "是否含未标注的广告/营销内容", "视频描述是否涉及版权风险"],
-    },
-    bilibili: {
-      name: "B站",
-      checks: ["标题/简介是否含引战内容", "是否含未经授权的转载声明", "弹幕关键词是否含违规词", "分区选择是否与内容匹配", "是否含过度营销内容"],
-    },
-    wechat: {
-      name: "公众号",
-      checks: ["标题是否含标题党/夸大宣传", "正文是否含未标注的广告", "是否涉及时政/金融等需资质内容", "是否含诱导分享/关注的话术", "原创声明是否合规"],
-    },
-    shipinhao: {
-      name: "视频号",
-      checks: ["标题是否含夸张/极限词", "口播文案是否含诱导关注/导流", "是否涉及时政/医疗等需资质内容", "是否含搬运/版权争议内容", "话题标签是否含违禁词"],
-    },
-    kuaishou: {
-      name: "快手",
-      checks: ["口播文案是否含低俗/擦边球内容", "是否含未标注的广告/营销内容", "标题是否含夸大/虚构承诺", "是否含涉黄/暴力等违规内容", "视频描述是否涉及版权风险"],
-    },
-    weibo: {
-      name: "微博",
-      checks: ["博文是否含敏感时政内容", "是否含人身攻击/引战言论", "#话题#是否含违禁词", "是否含造谣/不实信息", "是否含未标注的广告植入"],
-    },
-    toutiao: {
-      name: "今日头条",
-      checks: ["标题是否含标题党/夸大宣传", "正文信息是否真实可查证", "是否涉及时政/金融等需资质内容", "是否含搬运/洗稿内容", "是否含诱导点击/误导性描述"],
-    },
+  // 八大平台差异化检测重点（平台名取自注册表，此处只写各平台的检测项）
+  const COMPLIANCE_CHECKS = {
+    xhs: { checks: ["标题是否含夸张/极限词（最/第一/绝对等）", "正文是否含导流信息（微信号/二维码描述）", "是否含医疗/金融等需资质话题", "图片描述是否涉及版权问题", "话题标签是否合规无违禁词"] },
+    douyin: { checks: ["口播文案是否含敏感政治词", "是否含低俗/擦边球内容描述", "话题热词是否含违禁词", "是否含未标注的广告/营销内容", "视频描述是否涉及版权风险"] },
+    bilibili: { checks: ["标题/简介是否含引战内容", "是否含未经授权的转载声明", "弹幕关键词是否含违规词", "分区选择是否与内容匹配", "是否含过度营销内容"] },
+    wechat: { checks: ["标题是否含标题党/夸大宣传", "正文是否含未标注的广告", "是否涉及时政/金融等需资质内容", "是否含诱导分享/关注的话术", "原创声明是否合规"] },
+    shipinhao: { checks: ["标题是否含夸张/极限词", "口播文案是否含诱导关注/导流", "是否涉及时政/医疗等需资质内容", "是否含搬运/版权争议内容", "话题标签是否含违禁词"] },
+    kuaishou: { checks: ["口播文案是否含低俗/擦边球内容", "是否含未标注的广告/营销内容", "标题是否含夸大/虚构承诺", "是否含涉黄/暴力等违规内容", "视频描述是否涉及版权风险"] },
+    weibo: { checks: ["博文是否含敏感时政内容", "是否含人身攻击/引战言论", "#话题#是否含违禁词", "是否含造谣/不实信息", "是否含未标注的广告植入"] },
+    toutiao: { checks: ["标题是否含标题党/夸大宣传", "正文信息是否真实可查证", "是否涉及时政/金融等需资质内容", "是否含搬运/洗稿内容", "是否含诱导点击/误导性描述"] },
   };
+  const COMPLIANCE_RULES = Platforms.decorate(COMPLIANCE_CHECKS);
 
   async function aiComplianceCheck() {
     const body = readOriginal();
@@ -1556,7 +1524,6 @@ ${bodyHtml}
 
   function renderComplianceReport(report) {
     const riskColor = report.overall_risk === "高" ? "var(--danger)" : report.overall_risk === "中" ? "var(--warn)" : "var(--ok)";
-    const platformIcons = { xhs: "📕", douyin: "🎵", bilibili: "📺", wechat: "💬", shipinhao: "▶️", kuaishou: "📱", weibo: "🧣", toutiao: "📰" };
 
     return `
       <div class="editor-section compliance-report">
@@ -1602,7 +1569,7 @@ ${bodyHtml}
               return `
                 <div class="platform-compliance-card">
                   <div class="platform-compliance-header">
-                    <span>${platformIcons[k]} ${r.name}</span>
+                    <span>${Platforms.icon(k)} ${r.name}</span>
                     <span class="platform-status status-${statusClass}">${escapeHtml(status)}</span>
                   </div>
                   ${result.issues?.length ? `

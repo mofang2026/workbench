@@ -5,7 +5,7 @@
  * - 分镜表 + 时长统计 + 导出
  */
 
-WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
+WB.define("VideoScript", ["Db", "AiGateway", "Platforms"], (Db, AiGateway, Platforms) => {
   const VideoScript = (function () {
   const SCRIPT_TYPES = {
     short: { name: "短视频脚本", duration: "30-60s", platforms: ["抖音", "小红书"], desc: "节奏快、前3秒抓人、强互动结尾" },
@@ -124,14 +124,7 @@ WB.define("VideoScript", ["Db", "AiGateway"], (Db, AiGateway) => {
         <div class="field">
           <label class="field-label">目标平台</label>
           <select id="vsPlatform" class="select">
-            <option value="抖音">抖音</option>
-            <option value="小红书">小红书</option>
-            <option value="B站">B站</option>
-            <option value="公众号">公众号</option>
-            <option value="视频号">视频号</option>
-            <option value="快手">快手</option>
-            <option value="微博">微博</option>
-            <option value="今日头条">今日头条</option>
+            ${Platforms.options(false).map(p => `<option value="${p.label}"${p.key === "douyin" ? " selected" : ""}>${p.label}</option>`).join("")}
           </select>
         </div>
       </div>

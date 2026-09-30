@@ -1345,6 +1345,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .alert-douyin { border-left: 3px solid var(--douyin-accent); }
 .alert-bilibili { border-left: 3px solid var(--bilibili); }
 .alert-wechat { border-left: 3px solid var(--wechat); }
+.alert-shipinhao { border-left: 3px solid var(--shipinhao); }
+.alert-kuaishou { border-left: 3px solid var(--kuaishou); }
+.alert-weibo { border-left: 3px solid var(--weibo); }
+.alert-toutiao { border-left: 3px solid var(--toutiao); }
 
 /* 排期统计看板 */
 .cal-stats {
