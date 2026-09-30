@@ -198,6 +198,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   margin: 0 auto;
   padding: var(--ws-pad-t) 32px var(--ws-pad-b);
 }
+/* 模态与工作区共用容器名 ws：容器查询解析到最近的同名祖先容器，所以模态里的布局量的是
+   模态自己的内容盒（实测 640 - 2×24 padding = 592），不是背后工作区的宽度。
+   同一批「容器 ws」查询因此不用为模态再写一份 —— 模态里 .editor-layout 挤成两列的既有 bug
+   就是这么修掉的：那条单列规则原来按视口判，1440 视口下永远不触发，如今按 592 判。 */
 .modal {
   container-type: inline-size;
   container-name: ws;
@@ -261,10 +265,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 980px) {
+@container ws (max-width: 916px) {
   .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 640px) {
+@container ws (max-width: 576px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
 
@@ -705,7 +709,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   grid-template-columns: 1fr 1fr;
   gap: 18px;
 }
-@media (max-width: 980px) {
+@container ws (max-width: 916px) {
   .editor-layout { grid-template-columns: 1fr; }
 }
 
@@ -819,7 +823,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   box-shadow: inset 0 0 0 2px var(--brand);
 }
 
-@media (max-width: 720px) {
+@container ws (max-width: 656px) {
   .calendar-grid { grid-template-columns: repeat(7, minmax(60px, 1fr)); overflow-x: auto; }
   .calendar-cell { min-height: 80px; }
 }
@@ -1107,7 +1111,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
-@media (max-width: 640px) {
+@container ws (max-width: 576px) {
   .platform-compliance-grid { grid-template-columns: 1fr; }
 }
 .platform-compliance-card {
@@ -1307,10 +1311,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   grid-template-columns: repeat(6, 1fr);
   gap: 12px;
 }
-@media (max-width: 900px) {
+@container ws (max-width: 836px) {
   .metrics-dashboard { grid-template-columns: repeat(3, 1fr); }
 }
-@media (max-width: 560px) {
+@container ws (max-width: 496px) {
   .metrics-dashboard { grid-template-columns: repeat(2, 1fr); }
 }
 .metric-kpi-card {
@@ -1341,7 +1345,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   height: 240px;
   width: 100%;
 }
-@media (max-width: 640px) {
+@container ws (max-width: 576px) {
   .chart-wrap { height: 200px; }
 }
 
@@ -1400,8 +1404,8 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   grid-template-columns: repeat(7, 1fr);
   gap: 10px;
 }
-@media (max-width: 900px) { .cal-stats { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 560px) { .cal-stats { grid-template-columns: repeat(2, 1fr); } }
+@container ws (max-width: 836px) { .cal-stats { grid-template-columns: repeat(4, 1fr); } }
+@container ws (max-width: 496px) { .cal-stats { grid-template-columns: repeat(2, 1fr); } }
 .cal-stat-card {
   background: var(--surface-soft);
   border: 1px solid var(--line);
@@ -1470,7 +1474,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .cal-week-cell.drag-over { background: rgba(89, 196, 255, 0.18); }
 .cal-week-cell .cal-item { font-size: 10px; padding: 2px 6px; margin-bottom: 2px; }
 
-@media (max-width: 768px) {
+@container ws (max-width: 704px) {
   .cal-week-grid, .cal-week-body { grid-template-columns: 44px repeat(7, 1fr); }
   .cal-week-hour { font-size: 9px; }
   .cal-week-cell { min-height: 36px; }
@@ -1525,10 +1529,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   gap: 16px;
   min-height: 600px;
 }
-@media (max-width: 1100px) {
+@container ws (max-width: 1036px) {
   .card-design-layout { grid-template-columns: 180px 1fr 260px; }
 }
-@media (max-width: 900px) {
+@container ws (max-width: 836px) {
   .card-design-layout { grid-template-columns: 1fr; }
   .cd-sidebar { order: 1; max-height: 300px; }
   .cd-main { order: 0; }
@@ -1839,7 +1843,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .hr-topic-actions { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .hr-topic-actions .btn { width: 100%; justify-content: center; }
 
-@media (max-width: 640px) {
+@container ws (max-width: 576px) {
   .hr-topic-card { flex-direction: column; }
   .hr-topic-side { flex-direction: row; justify-content: space-between; width: 100%; min-width: 0; }
   .hr-topic-actions { flex-direction: row; width: auto; }
@@ -2030,7 +2034,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .chat-wrap {
   display: flex;
   gap: 14px;
-  height: calc(100vh - 168px);
+  height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b));
   min-height: 520px;
 }
 .chat-rail {
@@ -2109,7 +2113,11 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .chat-tool-cols { display: block; font-size: 10px; color: var(--muted-2); margin-top: 2px; }
 .chat-tables { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .chat-tables code { font-size: 11px; color: var(--brand); }
-@media (max-width: 1180px) { .chat-tools { display: none; } }
+/* 全站唯一不按 -64 平移的阈值（原视口断点 1180px）：这条是「三栏硬底」型，不是内容宽度平移型。
+   硬底 = .chat-rail 190 + .chat-tools 232 + gap 14×2 = 450，再给 .chat-main 留 350 → 800。
+   实测：容器 1112（视口 1440）→ 三栏、.chat-main 662；容器 696（视口 1024）→ 退两栏。
+   若照抄 1180-64=1116，1440 下 1112 ≤ 1116 会命中，助手页在开发机常用宽度上丢工具栏。 */
+@container ws (max-width: 800px) { .chat-tools { display: none; } }
 
 .chat-thread { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }.chat-msg { display: flex; gap: 10px; }
 .chat-msg-user { justify-content: flex-end; }
