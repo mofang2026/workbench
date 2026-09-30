@@ -264,6 +264,7 @@ WB.define("Settings", ["Reminders", "Db", "AiGateway", "WorkbenchConfig", "Platf
       <!-- 代理模式说明 -->
       <div class="callout callout-info mb-md" id="aiProxyNoteWrap" style="${s.mode === "proxy" ? "" : "display:none;"}">
         <strong>ℹ 代理模式说明</strong>：下方「主用提供商」「故障转移」「供应商配置」会生效。<br />各提供商的 <b>API Key 与 Base URL 由服务端（Vercel 环境变量）决定</b>，前端仅上传用户偏好（启用状态 / 顺序 / 模型），密钥不会泄露。
+        <br /><span class="text-xs muted-2">助手页在代理模式下不可用：代理路由不透传工具调用。要用助手就切「直连模式」并填你自己的 Key——线上版三家模型均已验证支持浏览器跨域调用。</span>
       </div>
 
       <!-- 供应商配置区（直连：含 API Key/Base URL；代理：仅启停/顺序/模型生效） -->
