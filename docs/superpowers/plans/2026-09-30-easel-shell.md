@@ -206,8 +206,11 @@ PROBE = """() => {
     navInSidebar: document.querySelectorAll(".sidebar .nav-link").length,
     active: [...document.querySelectorAll(".nav-link.active")].map((e) => e.dataset.page),
     pageKids: vis.length === 1 ? vis[0].children.length : -1,
-    chatBottom: (function () { const c = document.querySelector(".chat-wrap");
-      return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+    chatWrap: (function () { const c = document.querySelector(".chat-wrap");
+      if (!c) return null; const ws = document.querySelector(".workspace");
+      if (!ws) return null; const b = c.getBoundingClientRect(), s = getComputedStyle(ws);
+      return {top: b.top, bottom: b.bottom,
+              padT: parseFloat(s.paddingTop), padB: parseFloat(s.paddingBottom)}; })(),
     overflowX: document.documentElement.scrollWidth - Math.round(window.innerWidth),
     vw: window.innerWidth, vh: window.innerHeight,
   };
@@ -342,10 +345,22 @@ def main():
 
             pg.evaluate("() => window.switchPage('chat')")
             c = pg.evaluate(PROBE)
-            want = c["vh"] - 80
-            check("7 chat 工作区填满可用高度", c["chatBottom"] is not None
-                  and want - 6 <= c["chatBottom"] <= c["vh"] + 1,
-                  f"chatBottom={c['chatBottom']} 期望≥{want - 6} vh={c['vh']}")
+            # RESULT7 是算术恒等式，不是判定带。旧带 `vh-80-6 <= chatBottom <= vh+1`
+            # （vh=900 时放行 [814, 901]）会被硬常量骗过去：height: calc(100vh - 114px) 也在带内，
+            # 而 Task 2 拆掉的那个 168px 恰恰就是这类常量。恒等式 =
+            #   chatBottom == chatTop + (vh - padT - padB)
+            # 右边四项全部现量（rect.top / rect.bottom / .workspace 的 computed padding / innerHeight），
+            # 于是「页面自身那点顶部偏移」自己进了等式，不再是要硬凑的 +5。
+            # 容差取 ±1px 并说清理由：chatTop 与 chatBottom 是两次独立的浮点读数（非整数 DPR 或
+            # 页面缩放下各带小数），相减最坏漂 1px；实测两档 vh=900 下等式两边都是整数 820，误差 0。
+            # 变异 chat_vh_old（把高度换回 calc(100vh - 168px)）实测 760 vs 820 → 红，旧带反而放行过。
+            g = c["chatWrap"]
+            want = g["top"] + (c["vh"] - g["padT"] - g["padB"]) if g else None
+            check("7 chat 高度 = 工作区可用高度（算术恒等式）", bool(g)
+                  and abs(g["bottom"] - want) <= 1,
+                  (f"chatBottom={g['bottom']:.0f} 期望 chatTop={g['top']:.0f} + "
+                   f"(vh={c['vh']} - padT={g['padT']:.0f} - padB={g['padB']:.0f}) = {want:.0f} ±1"
+                   if g else "chatBottom=量不到 .chat-wrap 或 .workspace"))
 
             m = pg.evaluate(MODAL)
             check("8 模态覆盖整视口 + 编辑器是单列 grid", m["parent"] == "BODY"
@@ -881,7 +896,7 @@ git commit -m "feat(shell): 顶部横向导航改为常驻左栏 + 右工作区"
 - Consumes: Task 2 的 `container-name: ws`、`--ws-pad-t/--ws-pad-b`
 - Produces: 所有工作区/模态内布局按「自己那一栏的宽度」响应；`shell_check.py` 的 RESULT8 转绿
 
-- [ ] **Step 1: 按「查询值」整批替换，不是按行号**
+- [x] **Step 1: 按「查询值」整批替换，不是按行号**
 
 先纠正我第一版的两个错，别照着错的手改：
 
@@ -912,7 +927,13 @@ done
 sed -i "s/@media (max-width: 1180px)/@container ws (max-width: 800px)/" assets/css/styles.css
 ```
 
-- [ ] **Step 2: 检查替换数量（按值数，不按行数）**
+**实测（Task 3）**：动手前 `grep -n "@media" assets/css/styles.css` 数到 15 条，落在 `264/267/708/822/1110/1310/1313/1344/1403/1404/1473/1528/1531/1842/2112`；按值分布 `640×4`、`900×3`、`980×2`、`560×2`、`720×1`、`768×1`、`1100×1`、`1180×1` = 15，与本表逐条一致（`index.html` 里 `@media` = 0）。上头那段 `sed` 循环原样跑完。
+
+- 表里 `:223/:224` 那两行（`.app-shell { padding: 20px 16px 60px; }` 与 `.topbar { padding: 12px 16px; gap: 12px; }`）**Task 2 已经删掉了**，本步无需再删：实测 `git show ad34f3d~1:assets/css/styles.css` 的 640 块里它们还在，当前文件 `grep -c topbar` = **0**，那个块现在只剩 `.grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }` 一行。
+- **`sed -i` 把整文件的 CRLF 换成了 LF**（`bytes 62826 → 60701`、`crlf 2229 → 0`、`bare_lf 0 → 2229`）。本仓库 100% CRLF，整文件换 EOL 是缺陷不是观感问题，当场用 bytes 级 `LF → CRLF` 还原成 `62930B / crlf 2229 / bare_lf 0 / 行数仍 2229`（`62826 + 104 = 62930`：14 条各 +7 字符、`1180→800` 那条 +6）。**给 Task 4/5 的口信：在这个仓库里 `sed -i` 之后必须查 EOL，或直接用会保 CRLF 的编辑器。**
+- 新增两处理由注释，都落在块**外**（`.modal {` 上方、`.chat-tools` 那条阈值上方），四个承重锚点一个没动。**踩到的坑记下来**：注释正文里不要出现字面量 `@media` / `@container`，否则本步 `grep -c "@media"` = 0 与 `@container` 总数 15 这两道门会被注释自己撞红（第一版就撞了，改成「原视口断点 1180px」「同一批『容器 ws』查询」后归零）。
+
+- [x] **Step 2: 检查替换数量（按值数，不按行数）**
 
 Run:
 ```bash
@@ -922,8 +943,24 @@ grep -c "@media" assets/css/styles.css
 ```
 Expected: `576×4`、`836×3`、`916×2`、`496×2`、`656×1`、`704×1`、`800×1`、`1036×1`（合计 15），`@media` 计数 = **0**（Task 4 才把窄屏那条加回来，它是刻意保留的视口查询）。数字对不上就是漏换或重换。此时 `@container` 总数应为 15；若你顺手数出 17，多半是把 `.modal`/`.workspace` 的 `container-type` 两行也误当查询计进去了。
 
+**实测（Task 3，逐字输出）**：
 
-- [ ] **Step 3: chat 高度去常量**
+```
+      1 @container ws (max-width: 1036px)
+      2 @container ws (max-width: 496px)
+      4 @container ws (max-width: 576px)
+      1 @container ws (max-width: 656px)
+      1 @container ws (max-width: 704px)
+      1 @container ws (max-width: 800px)
+      3 @container ws (max-width: 836px)
+      2 @container ws (max-width: 916px)
+```
+
+`grep -c "@media"` = **0**（grep 无匹配时 exit 1，是正常红）、`grep -c "@container"` = **15**（不是 16/17：`.workspace`/`.modal` 那两处的 `container-type` / `container-name` 行里不含 `@container` 字面量，但**注释里可能有** —— 见 Step 1 那条口信）。合计 15 条，与预期分布逐条对齐，无漏换无重换。
+落盘审计（Step 1-3 与两处注释全部落地后）：`63912B / crlf 2237 / bare_lf 0 / 结尾 CRLF / 行数 2237`；`grep -c "168px"` = 0、`grep -c topbar` = 0。
+
+
+- [x] **Step 3: chat 高度去常量**
 
 `styles.css:1986-1991` 现在是：
 
@@ -947,38 +984,98 @@ Expected: `576×4`、`836×3`、`916×2`、`496×2`、`656×1`、`704×1`、`800
 }
 ```
 
-- [ ] **Step 4: 跑 harness（两档宽度都要跑）**
+**实测（Task 3）**：落盘就是上面那 6 行，高度那一行的字面量是 `  height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b));`（一行、带分号），`grep -c "height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b));"` = **1** → `chat_vh_old` 的锚点唯一；`grep -c "168px"` = **0**。
+**锚点唯一性用驱动自己的 `locate()` 复核**（纯函数、不写盘；`importlib` 载入 `shell_mutate.py` 后逐个问 hits）：10 个变异里 9 个 `hits=1`，`narrow_no_degrade` `hits=0`（它的宿主 `.app-shell { display: block; }` 是 Task 4 要新增的那条视口降级，本步按 brief 故意不跑它）。四个承重锚点 `ws_min_width` / `chat_vh_old` / `modal_container` / `ws_container_gone` 全 `hits=1`，两种 EOL 拼法分开数也是「CRLF 形状 1 处 + LF 形状 0 处」。
+`.workspace` 的 `box-sizing: border-box;` **保留**（上一轮 review 提过它与 `* { box-sizing: border-box }` reset 重复）：它是 `ws_min_width` 锚点串的前半，删了那条变异就退化成 `SKIP`，`RESULT4` 的 `min-width: 0` 护栏就没人证了 —— 留它的理由是证据链，不是样式需要。
+
+
+- [x] **Step 4: 跑 harness（两档宽度都要跑）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py 1024`
 Expected: 两档都只剩 `RESULT9` 红（Task 4 的窄屏降级还没写），末行 `RESULT: FAIL(1/9)`。`RESULT8` 转 PASS 就是 `display: 'grid'` 且 `tracks: 1`，即那条 640px 模态挤两列的既有 bug 被容器查询顺手修掉了；`RESULT7` 的 `chatBottom` 应回到 **825**——这是算术推的：`height: calc(100vh - 28 - 80)` 在 vh=900 得 792，`.workspace` 顶部内边距 28 + 页面自身那 5px 得顶边 33，`33 + 792 = 825`，与改壳前实测的 825 相同。跑出来不是 825 就以实数为准并记在这里，别硬凑。
 
-- [ ] **Step 5: 量最窄桌面宽度下的溢出（这是改壳的真实代价，必须量不是猜）**
+**实测（Task 3，两档都是 `FAIL(1/9)`、只剩 `RESULT9` 红、`RESULT-OFFLINE: PASS`、exit 1）**：`RESULT8` 按预期转 PASS —— 1440 档 `{'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'display': 'grid', 'tracks': 1, 'vw': 1440, 'vh': 900}`，1024 档同形只是 `maskW/vw` 变 1024；`.modal` 内容盒实测 592（`640 - 2×24`）≤ 916，所以 `.editor-layout` 那条单列规则在模态里第一次真的生效了，`tracks` 从 2 变 1。
+`chatBottom` **实测量 = 820，不是算术推的 825**：差的正是那句「页面自身那 5px」—— `grep -c "page" assets/css/styles.css` = **0**，`.page` 这些 `<section>` 在本仓库没有任何 CSS 规则（显隐只靠 `.hidden { display: none !important; }`），所以 `.chat-wrap` 的顶边就等于 `.workspace` 的 `padding-top` = 28，`28 + 792 = 820`。以实数为准记在这里。
+
+**额外一步（controller ruling，本任务授权改 harness 的唯一一处）：`RESULT7` 的判定由「带」改成「算术恒等式」。**
+旧带 `vh-80-6 <= chatBottom <= vh+1` 在 vh=900 放行 `[814, 901]` 这 88px 宽的一个区间 —— 它能放行 `calc(100vh - 114px)` 这类**另一个硬常量**，而 Task 2 刚拆掉的 `168px` 就是同一族东西，所以那条带子对「去常量」这件事没有鉴别力。新判定：
+
+```
+chatBottom == chatTop + (vh - padT - padB)
+```
+
+`chatTop`/`chatBottom` 取 `.chat-wrap` 的 `getBoundingClientRect()`（浮点原值，不预先取整），`padT`/`padB` 取 `.workspace` 的 `getComputedStyle` 内补，`vh` 取 `innerHeight` —— 四项全部现量，于是页面那点顶部偏移自己进了等式，不再是需要硬凑的 `+5`。容差 **±1px**（理由写在 harness 注释里）：`chatTop` 与 `chatBottom` 是两次独立的浮点读数，非整数 DPR 或页面缩放下各带小数，相减最坏漂 1px；实测两档 vh=900 下等式两边都是整数 820、误差 0。9 条编号断言与 `FAIL(n/9)` 分母没动，判定行照旧把操作数打全：`RESULT7: PASS  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1`。
+改完 `python -m py_compile shell_check.py` 通过，且 `shell_check.py`（12549B / 257 行 / 100% CRLF）与本文档 :133 那个围栏块 **raw 逐字节相同**（两文件都是 CRLF，所以不需要先做 LF 归一）。`chat_vh_old` 在新判定下实测打红（见 Step 6 的证据行）：`chatBottom=760 期望 ... = 820 ±1`。
+
+
+- [x] **Step 5: 量最窄桌面宽度下的溢出（这是改壳的真实代价，必须量不是猜）**
 
 `shell_check.py` 的第一个参数就是巡检宽度，不用改代码：`shell_check.py 1024`（Tauri `minWidth`）。
 改壳前实测（2026-09-30）：`RESULT4: PASS 12 页均无横向溢出 []` —— 今天 1024 下 12 页都不溢出，所以改壳后也必须如此，这条不是奢望。
 Expected: 1024 档 `RESULT4` PASS。若 `card-design` 溢出，注意 `.cd-preview` 今天已带 `max-width:100%`（实测 `styles.css:1560`），所以别再加一遍同一条；真正要看的是 `.card-design-layout` 的 `220px 1fr 280px`（`:1480`）在容器 696 下有没有被 `.cd-editor`/`.cd-main` 里的不可断行内容撑破——按 Step 1 的换算，1024 视口下容器 = `1024-328 = 696 ≤ 836`，`:1487` 那条应已把它降成 `1fr` 单列；若仍是三列，说明阈值平移算错了，回 Step 1 复核而不是加 `overflow:hidden` 糊过去。若 `chat` 页在 1024 下三栏挤（内容 696 ≤ 800），`.chat-tools` 应自动隐藏而 `RESULT4` 仍 PASS——这正是 Step 1 里那条特例的验证点。
 
+**实测（Task 3）**：1024 档 `RESULT4: PASS  4 12 页均无横向溢出  []`，1440 档同 PASS。Task 2 记下的 `card-design(+186px)` 是容器查询自己收掉的，**没有加 `overflow: hidden`，也没有再补一条 `.cd-preview{max-width:100%}`**（它本来就在）。
+`1180 → 800` 那条特例按「量不是猜」的要求用一次性 Playwright 脚本量过（自带静态服务 + 外部请求全 abort + 按 `.verify-shell` 口径打桩 `Db`/`Supabase` + 把未登录遮罩 `#authMask` 手动 `.add("hidden")`；脚本在 `/f/tmp/task3/`，不入库）：
 
-- [ ] **Step 6: 证明断言会变红**
+| 视口宽 | `.workspace` 容器内容宽 | `.chat-tools` computed `display` | `.chat-tools` 实测宽 | `.chat-main` 宽 | `.chat-wrap` 高（top/bottom） | `.card-design-layout` 的 `gridTemplateColumns` |
+|---|---|---|---|---|---|---|
+| 1440 | 1112 | `block`（**工具栏在**） | 232 | 662 | `792px`（28 / 820） | `220px 580px 280px`（3 轨） |
+| 1024 | 696 | `none`（**退两栏**） | 0 | 492 | `792px`（28 / 820） | `696px`（1 轨） |
+
+三个阈值算术全部当场对上：`696 ≤ 800` 隐藏、`1112 > 800` 保留（照抄 `-64` 会得到 1116，`1112 ≤ 1116` 就在 1440 上误隐藏）；`1036` 那条让 1440 留三列、`836` 那条让 1024 退一列（`696 ≤ 836`），于是 `RESULT4` 的 186px 归零；`.chat-main` 在 1440 得 662，与 Step 1 那段 `450 + 350 = 800` 的预测同值。两档 `overflowX` 都是 0、JS 错误 0、外部请求 8 次全拦截。
+本轮动手前（HEAD `e266da9`，Step 1 还没跑）用**同一把尺子**量过一遍做对照：1440 档 `chatWrap = {top: 28, height: 732, bottom: 760}`、`chatToolsDisplay: 'block'`、`modal tracks: 2`；1024 档 `chatWrap` 同 732/760、`wsContentW: 696`、`CARD overflowX: 186`、`modal tracks: 2`。对照本轮同位置的 `792/820`、`tracks: 1`、`overflowX: 0` —— 三条变化各自对应 Step 1/3 的一处改动，`186` 是 Task 2 Step 5 记下的那条已知代价、不是本轮新引入的。（那是量测脚本，只打几何与 computed style，不含 `@container` 命中率的直接观测。）
+
+
+- [x] **Step 6: 证明断言会变红**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col ws_container_gone page_id_gone ws_min_width sidebar_class_gone nav_dup chat_vh_old modal_container`
 Expected: 10 行全部 `OK 变红`，exit 0。**故意不带 `narrow_no_degrade`**：此刻 RESULT9 还是红的（Task 4 没做），它会以 `INVALID` 报出来——那不是失败，是时序。
 任一行 `BAD 没变红`、`SKIP` 或 `ANCHOR` 就是计划本身有问题（`ANCHOR` 有两种成因，别一律当成「该删的没删干净」：`nav_dup` 那类是旧顶栏没删净留下两份导航，`no_sticky` 那类是 Task 2 该**接手**的 `position: sticky;` 被写了第二处而旧处没删——两种都要回到 Task 2 的删除/新增那一步去收窄锚点），停下报告，不要继续。
 （`SKIP` 的意思是锚点串在文件里找不到 —— 例如把 `.modal` 那条容器块漏写了，此时断言根本没东西可测，继续下去就是自欺。逐行核对缩进的 `证据` 与 `COLLATERAL`：目标那条的判定值要肉眼可读（`grid_one_col` 之后 RESULT2 应显示 `containerName` 仍然对得上、`x` 不等于 264；`ws_container_gone` 之后应显示 `containerName=none`），除目标外多出的红项要在 `COLLATERAL` 里点得名，说不清就怀疑变异串撞到了别处。到这一步 `nav_dup` 的锚点已经在 `.sidebar` 内，它会连带把 RESULT5 打红（`navInSidebar` 12→13），所以它下面那行 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6` 是**预期**的（Task 4 Step 3 同）；RESULT5 自己的证明仍是 `sidebar_class_gone` 那一行。还有：如果基线那一次 `shell_check.py` 没把话说完（无 RESULT 判定行 / 无末行汇总 / 退出码非 0-1 / 超过 120s 没退出），驱动会在打印 `变异前基线红项` 之前就中止，一条变异都不写盘——那时先修 harness 或查环境，别去怀疑断言。）
 
-- [ ] **Step 7: 视觉回归 + Agent 回归**
+**实测（Task 3，10 行全 `OK 变红`、exit 0、0 SKIP / 0 INVALID / 0 ANCHOR / 0 BAD）**：首行基线 `变异前基线红项：['RESULT9']`（与 Step 4 的 1 红一致 —— 本轮把 harness 改完之后才跑的这一步），末行 `全部断言已被证明会变红`。逐条 `证据`（判定值都能肉眼复核）：
+
+| 变异 | 目标 | 证据里的判定值 | 新红集合 |
+|---|---|---|---|
+| `sidebar_w_zero` | RESULT1 | `{'x': 0, 'y': 0, 'w': 29, 'h': 900}` | `['RESULT1','RESULT2']` —— COLLATERAL 预期 |
+| `no_sticky` | RESULT1 | `sidebarPos` 不再是 sticky（同 dict，`w: 264`） | 只有 RESULT1（+ 基线 RESULT9） |
+| `grid_one_col` | RESULT2 | `{'x': 60, 'y': 900, 'w': 1320, 'h': 1174} containerName=ws` —— x≠264 而容器名仍对得上，正是本步要求的样子 | `['RESULT1','RESULT2']` —— COLLATERAL 预期 |
+| `ws_container_gone` | RESULT2 | `{'x': 264, ...} containerName=none` | 只有 RESULT2 |
+| `page_id_gone` | RESULT3 | `空页=['rules(-1)'] JS错误=[]` | 只有 RESULT3 |
+| `ws_min_width` | RESULT4 | 12 页全部 `(+24px)` 溢出 | 只有 RESULT4 |
+| `sidebar_class_gone` | RESULT5 | `实际 0` | `['RESULT1','RESULT5']` —— COLLATERAL 预期 |
+| `nav_dup` | RESULT6 | `['chat(chat,chat)']`（`navInSidebar` 12→13 连带 RESULT5） | `['RESULT5','RESULT6']` —— COLLATERAL 预期 |
+| `chat_vh_old` | RESULT7 | `chatBottom=760 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1` | 只有 RESULT7 |
+| `modal_container` | RESULT8 | `{'maskW': 1440, 'display': 'grid', 'tracks': 2, ...}` —— 容器一摘，模态里那条单列规则不再生效，`tracks` 回到 2 | 只有 RESULT8 |
+
+四对 COLLATERAL 与计划预告的名单逐字相同（`sidebar_w_zero`/`grid_one_col` → `['RESULT1','RESULT2']`，`sidebar_class_gone` → `['RESULT1','RESULT5']`，`nav_dup` → `['RESULT5','RESULT6']`），除此之外没有第五对，也没有任何一条撞到 RESULT7/RESULT8。
+`chat_vh_old` 这一行同时是 Step 4 那条恒等式的验收：**旧判定带在 vh=900 放行 `[814, 901]`，恒等式只放行 `820 ±1`**，760 两边都红，但带会放行 `calc(100vh - 114px)` 那种同族硬常量而恒等式不会。
+还原复核（按字节）：跑前 `styles.css` `63912B / sha256 1a4ec610f18f9d66…`、`index.html` `12353B / sha256 473aba764cad2f6e…`；跑后两个哈希一字不变，另用 `cmp` 对 `/f/tmp/task3/` 里的快照比过一次相同；`git status --short` 只剩 ` M assets/css/styles.css`。
+
+
+- [x] **Step 7a: Agent 全链路没被改坏（自动化那半）**
+
+Run: `cd /f/Qoder/自媒体/.verify-agent && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" drive.py`
+Expected: `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0。
+**实测（Task 3）**：全绿 —— `RESULT-STREAM: PASS`、`RESULT1…RESULT11: PASS`、末行 `RESULT: PASS`、**exit 0**；`JS 错误(全程): (无)`；唯一噪声是 stderr 里 `mock_provider.py:86` 那段 `ConnectionAbortedError: [WinError 10053]` traceback，来自 RESULT5「停止生成」那一轮被客户端掐断，是驱动自己的既有行为、与 shell 无关（那一轮 `RESULT5: PASS`）。本轮动的是 CSS 断点与 `.chat-wrap` 高度，`assets/js/**` 一个字节没改，`chat` 页三栏在 1024 档退两栏（`.chat-tools` 隐藏）也没牵到工具面板：`RESULT7` 仍打 `面板工具: ['db_list','db_get','db_stats','skill_topic_schedule_gap']`。
+
+- [ ] **Step 7b: 12 页人眼视觉验收（自动化代替不了）**
 
 12 页人工翻一遍（对照 Easel 的比例感，实测可查的行：`web/frontend/src/styles/index.css:37` `--sidebar-width: 264px`、`:85-93` `.sidebar`、`:96` `.sidebar-header{padding:18px 16px 14px}`、`:136` `.sidebar-nav{padding:10px 8px;flex-direction:column;gap:2px}`、`:210` `.main-content`）。
-Expected: `drive.py` 的 `RESULT-STREAM` + `RESULT1…RESULT11` 全 PASS、exit 0；无页面出现横向滚动条。
-这条只能人工：自动化量的是几何与异常，量不出「左栏 12 项是否比原来更难指认」「`.nav-link.active::before` 那 3px 竖条是否太弱」。视觉判断不对就当场调 Task 2 Step 4 的 `.sidebar .nav-link` 内边距/`gap`，别把「看着不像 Easel」留成待办。
+Expected: 无页面出现横向滚动条；左栏 12 项指认不难、「`.nav-link.active::before` 那 3px 竖条不太弱」。
+这条只能人工：自动化量的是几何与异常，量不出「左栏 12 项是否比原来更难指认」「那 3px 竖条是否太弱」。视觉判断不对就当场调 Task 2 Step 4 的 `.sidebar .nav-link` 内边距/`gap`，别把「看着不像 Easel」留成待办。
+**自动化能替到的部分（不构成打勾）**：`RESULT4` 在 1440 与 1024 两档都 `PASS []`，即「无页面出现横向滚动条」这一半是量到的；后一半（指认难度、竖条强弱）没量也没人看，所以本步**保持未勾**，正式档期在 Task 6 Step 5。本轮新增的可见风险点是 `.chat-tools` 在 1024 档 `display: none`（工具栏整块消失，改壳前 1024 视口同样隐藏 —— 阈值 1180 视口 vs 800 容器在这一档结论相同），人眼要确认的是「退两栏后的助手页看起来是设计而不是坏了」。
 
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add assets/css/styles.css
 git commit -m "refactor(shell): 工作区断点改容器查询，chat 高度去硬编码"
 ```
+
+**实测（Task 3）**：已按上头两条命令落库 —— `695b163 refactor(shell): 工作区断点改容器查询，chat 高度去硬编码`，`1 file changed, 24 insertions(+), 16 deletions(-)`（只 `assets/css/styles.css`：15 条查询各 ±1 行、`.chat-wrap` 高度 ±1 行、两处理由注释 +8 行；未 `git add -A`、未 `git add dist/`、未 `--amend`、未 `--no-verify`、**未 push**）。`index.html` 与 `assets/js/**` 本轮一个字节没动（`index.html` 跑前跑后同为 `12353B / sha256 473aba764cad2f6e…`）。本步文档改动（复选框、实测量、`shell_check.py` 围栏块同步）按同一口规单独一个 `docs(plan)` commit，不与代码混在一起。
+给 Task 4 的交接量：本步跑完后 `grep -c "@media" assets/css/styles.css` = **0**、`@container ws (max-width: …)` = 15 条，你新增的那条 `.app-shell { display: block; }` 必须落在 `@media (max-width: 760px)`（视口查询，不是容器查询）里，`narrow_no_degrade` 的锚点才有宿主；`shell_check.py` 的 `RESULT9` 是当前唯一红项（`FAIL(1/9)`，两档都是），`chat_vh_old`/`modal_container` 两条变异本轮已各自证过（见 Step 6 表），你那一步跑全 11 条时基线红项应该是 `全绿`。
 
 ---
 
