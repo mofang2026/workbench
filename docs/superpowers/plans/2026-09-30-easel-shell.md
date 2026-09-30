@@ -49,8 +49,8 @@
 
 | 路径 | 动作 | 职责 |
 |---|---|---|
-| `F:\Qoder\自媒体\.verify-shell\shell_check.py` | 新建（仓库外，避免被 `sync-dist.js` 打进桌面包） | shell 几何回归：**9 条**编号 RESULT 断言 + 1 条 `RESULT-OFFLINE`（外部请求尝试/拦截/漏网三计数），全程离线 |
-| `F:\Qoder\自媒体\.verify-shell\shell_mutate.py` | 新建 | 把 shell_check 的每条断言逐个改红（**11** 个变异），证明非空跑；带「变异前基线红项」预检 + 离线预检（`RESULT-OFFLINE` 红则整轮作废）、完整 FAIL 行证据与 `COLLATERAL` 共现点名，按字节读写还原；锚点命中按**逻辑 EOL** 计数（≠1 处即拒绝写盘）；子进程空跑/挂死一票否决（`CHECK_TIMEOUT = 120s`，没有 RESULT 行/没有末行汇总/退出码非 0-1/超时 = 整轮作废） |
+| `F:\Qoder\自媒体\.verify-shell\shell_check.py` | 新建（仓库外，避免被 `sync-dist.js` 打进桌面包） | shell 几何回归：**10 条**编号 RESULT 断言 + 1 条 `RESULT-OFFLINE`（外部请求尝试/拦截/漏网三计数），全程离线。第 10 条（窄屏 chat 竖向装进视口）是 Task 4 fix round 1 加的，它不是「多测一页」，是把降级段那条实测常量从「靠人眼」抬成「会红」 |
+| `F:\Qoder\自媒体\.verify-shell\shell_mutate.py` | 新建 | 把 shell_check 的每条断言逐个改红（**12** 个变异，`nav_h_gone` 是 Task 4 fix round 1 补的第 12 条），证明非空跑；带「变异前基线红项」预检 + 离线预检（`RESULT-OFFLINE` 红则整轮作废）、完整 FAIL 行证据与 `COLLATERAL` 共现点名，按字节读写还原；锚点命中按**逻辑 EOL** 计数（≠1 处即拒绝写盘）；子进程空跑/挂死一票否决（`CHECK_TIMEOUT = 120s`，没有 RESULT 行/没有末行汇总/退出码非 0-1/超时 = 整轮作废） |
 | `F:\Qoder\自媒体\.verify-shell\cors_check.py` | 新建（Task 5） | 三家 provider 的浏览器 preflight 复检，线上直连可行性的可复跑证据；无需 Key |
 | `workbench/index.html` | 改 `62-88`（顶部导航 → 侧栏 + 工作区开标签）、`227`（`.app-shell` 闭标签前补 `</main>` 闭合） | DOM 骨架 |
 | `workbench/assets/css/styles.css` | 删 `100-111`、`147-151`、`223-224`；改 `154-158`；`:root` 增 3 个 token；新增 `.sidebar/.workspace` 段；15 条 `@media` → `@container` | 布局本体，唯一的行为变更面 |
@@ -232,6 +232,18 @@ MODAL = """() => {
   return out;
 }"""
 
+NARROW_CHAT = """() => {
+  const sb = document.querySelector(".sidebar");
+  const ws = document.querySelector(".workspace");
+  const cw = document.querySelector(".chat-wrap");
+  if (!ws || !cw) return null;
+  const b = sb ? sb.getBoundingClientRect() : null;
+  const s = getComputedStyle(ws), c = cw.getBoundingClientRect();
+  return {sidebarH: b ? Math.round(b.height) : null, padB: parseFloat(s.paddingBottom),
+          top: c.top, bottom: c.bottom, h: c.height,
+          vh: innerHeight, scrollH: document.documentElement.scrollHeight};
+}"""
+
 # 离线约束的三个计数：真有过外部请求（否则 abort 规则是在空跑）、全部由本 harness abort 掉
 # （规则确实经手了这些请求）、零个拿到响应（漏网）。删掉 ctx.route 那行现在会改输出、改 exit。
 ext_tried, ext_blocked, ext_leaked = [], [], []
@@ -388,6 +400,31 @@ def main():
                   and n["pageKids"] >= 1 and not errs,
                   f"display={n['display']} overflowX={n['overflowX']} 错误={errs[:2]}")
 
+            # ---- 窄屏 chat 竖向装得下（RESULT9 只量 dashboard 的横向，这条补竖向）----
+            # 改壳前 chat 的高度算式是 100vh 减一个 168px 常量，那个常量把顶栏高度折在里面；
+            # 换成 token 之后折叠丢了，降级段把侧栏叠到工作区上方却没有一项减掉它，2026-10-01
+            # 实测 390×780 溢出 83px（= 顶栏 111 - 桌面 padT 28），chat 输入框落到折叠线以下、
+            # 要滚动才够得着。判据两半全部现量、除 ±1 容差不含任何常量：文档不再竖向滚动，
+            # 且 chat 底边 + 工作区下内补必须压得进视口（前半管「别的元素也别溢出」，
+            # 后半管「chat 的高度算式确实减掉了顶栏」，两半各自能单独红）。
+            # 只钉 390×780 这一档：vh < 711（= min-height 520 + 顶栏 111 + padT 20 + padB 60）时
+            # 520 的地板起跳、必然溢出，那是与改壳前同类的既成取舍（改壳前 390×640：
+            # 640-168=472 < 520 → 也是 520、也溢出），已写进计划 Task 6 Step 6 的人眼清单。
+            # 探针必须对「侧栏这个类没了」保持哑（sidebar_class_gone 那条变异会把 <aside class="sidebar">
+            # 改成 <aside>）：RESULT10 真正要量的是 chat 装不装得进视口，sidebarH 只是证据串里的解释量，
+            # 拿 .sidebar 直接 getBoundingClientRect() 会在变异轮里抛 TypeError、把整个子进程打挂，
+            # 驱动随即按「没走完 main()」中止 —— 2026-10-01 就是这么抓到第一版探针的（那条变异的目标是
+            # RESULT5，它不该顺带把后面几条断言一起灭掉，更不该让整轮一条都没量到）。
+            pg.evaluate("() => window.switchPage('chat')")
+            nc = pg.evaluate(NARROW_CHAT)
+            check("10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）",
+                  bool(nc) and nc["scrollH"] - nc["vh"] <= 0
+                  and nc["bottom"] + nc["padB"] <= nc["vh"] + 1,
+                  (f"sidebarH={nc['sidebarH']} chatH={nc['h']:.0f} "
+                   f"chatBottom={nc['bottom']:.0f} + padB={nc['padB']:.0f} <= vh+1={nc['vh'] + 1}"
+                   f" scrollH={nc['scrollH']} overflowY={nc['scrollH'] - nc['vh']}"
+                   if nc else "chatBottom=量不到 .chat-wrap 或 .workspace"))
+
             browser.close()
     finally:
         emit()
@@ -479,12 +516,19 @@ MUT = {
     "nav_dup": (HTML, '<a class="nav-link" data-page="chat">助手</a>',
                 '<a class="nav-link" data-page="chat">助手</a>\n          '
                 '<a class="nav-link" data-page="chat">助手（重复）</a>', "RESULT6"),
-    "chat_vh_old": (CSS, "height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b));",
+    # 锚点跟着 styles.css 的 .chat-wrap 高度算式走（那一式现在多减一个 --nav-h）；变异的含义没变，
+    # 仍是「把高度换回那个 168px 硬常量」。它现在同时会打红 RESULT10（降级段也吃这条基础规则），
+    # 那是预期的共现，见计划 Task 6 Step 2 的白名单。
+    "chat_vh_old": (CSS, "height: calc(100vh - var(--nav-h) - var(--ws-pad-t) - var(--ws-pad-b));",
                     "height: calc(100vh - 168px);", "RESULT7"),
     "modal_container": (CSS, ".modal {\n  container-type: inline-size;\n  container-name: ws;\n}",
                         "/* 模态容器被移除 */", "RESULT8"),
     "narrow_no_degrade": (CSS, ".app-shell { display: block; }",
                           ".app-shell { display: grid; }", "RESULT9"),
+    # 降级段忘掉顶部导航高度（回到 Task 4 修复前的状态）：chat 高度算式少减 111 → 390×780 下
+    # chatH 从 589 涨到 700、overflowY 从 0 涨到 111 → RESULT10 红。这条是 RESULT10 的非空跑证明，
+    # 也是 --nav-h 这个实测常量漂了之后唯一会响的警报。
+    "nav_h_gone": (CSS, "--nav-h: 111px;", "--nav-h: 0px;", "RESULT10"),
 }
 
 
@@ -1134,6 +1178,13 @@ git commit -m "refactor(shell): 工作区断点改容器查询，chat 高度去�
 注意两点，都要写进 commit 说明或代码注释旁边：
 1. `@media` 用视口宽度是对的 —— 这里退化的是整个壳（侧栏在不在），不是某一栏的内容宽度，所以不能用容器查询。
 2. 降级段把 `.workspace` 内边距从 `32px` 改成 `16px`，于是窄屏下「容器阈值 ↔ 视口」的换算与桌面不同：桌面是 `内容 = 视口 - 264 - 64`，降级后是 `内容 = 视口 - 32`。同一容器阈值下，降级形态比桌面晚 32px 命中（`T-64` 对应视口 `T-32` 而不是 `T`）。这是既成事实的取舍，不是 bug：手机宽度下没人拿 32px 当尺子，但改数字时要意识到两档的尺子不一样长。
+> 更正（Task 4 fix round 1，评审 Minor 4）：上一句的**基准标错了**。同一条容器阈值 `C`，三档形态的命中视口分别是：改壳前 `V = C + 64`（`.app-shell` 左右各 32px 内补）、桌面侧栏 `V = C + 328`（再加 `--sidebar-w 264`）、降级形态 `V = C + 32`。所以「晚 32px」只对**改壳前**成立（`C+64 → C+32`），对**桌面**是晚 **296px**（`C+328 → C+32`）。括号里 `T-64 对应视口 T-32 而不是 T` 算的确实是改壳前那一档，写法本身没错，错的是「比桌面」三个字。操作后果（两档的尺子不一样长、改数字要意识到）不受影响。commit `15ec01a` 的说明里带着这句旧措辞 —— 按房规不 amend，更正只落在计划与本条 blockquote。
+
+**断点 760 从哪来（评审 Minor 3，2026-10-01 补）**：这一句必须写在这儿，因为 760 是计划直接给的、**原本没有推导** —— 全文搜不到它怎么来的，而改壳前 CSS 里的视口断点是 `980 / 900 / 768 / 720 / 640 / 560`，根本没有 760。现在给它两条硬约束与一次实测：
+- 约束一：`< 1024`。Tauri 桌面包的 `minWidth: 1024`（`tauri.conf.json`），断点必须低于它，桌面包才不会莫名其妙进降级形态。
+- 约束二：`≤ 824`。`824 = 496 + 264 + 64`，即 15 条容器规则里最窄的那条（`@container ws (max-width: 496px)`）在侧栏形态下收完的视口。断点若高于 824，就会有一段「降级已经生效、但容器规则还没收完」的重叠区，两套规则同时改同一批布局。
+- 实测（控制器，2026-10-01，用当时的 harness 两档参数化宽度）：`shell_check.py 761` 与 `shell_check.py 800` 两档都是全绿 + `RESULT-OFFLINE: PASS` + exit 0；761 档 `.workspace` 的 border-box 宽 497、容器内容宽 433，已低于 496，即全部容器规则都落在最窄形态而无横向溢出。**所以 760 不是在遮掩一个坏掉的区间** —— 断点上方紧贴着的形态是好的。
+- 如实记下没测到的：761..823 这一段「容器规则已全收完、但侧栏还在」只被测了 761 与 800 两个点，中间宽度无覆盖；这与 Task 3 遗留的那条 minor（四条更窄容器规则 576/496/656/704 在两档巡检里一次都没命中过）是同一个缺口，见 Task 6 Step 5 的人眼清单。
 
 **实测（2026-10-01）**：上面 Files 行的「遗留视口查询位置附近」已过时 —— Task 3 收口后 `styles.css` 里视口查询计数为 **0**，没有遗留位置。按 controller ruling，降级段插在 `.modal` 容器块（原 `:207-210`）之后、`/* ── 卡片 ── */` 之前：被它覆盖的全部 shell 规则（`.sidebar*` 原 `:146-190`、`.workspace` 原 `:191-200`）都在文件更早处，且 `:210` 之后再无对 `.workspace`/`.sidebar`/`.sidebar .nav-link` 的重新声明，同特异度按源序降级段即胜出 —— 不加 `!important`、不放文件末尾。两点「注意」按房规写进了 commit `15ec01a` 的说明，而不是 CSS 注释（`@media` 计数门禁把注释文本也算进去）。写入门禁实测：视口查询计数 = **1**、容器查询分布不变合计 **15**（`576×4、836×3、916×2、496×2、656×1、704×1、800×1、1036×1`）、`narrow_no_degrade` 的锚点行全文件唯一（1 处，单行、逐字）；EOL 审计 `64939B / crlf 2259 / bare_lf 0`（编辑工具保 CRLF，全程未用 sed -i）。
 
@@ -1143,6 +1194,7 @@ Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/�
 Expected: 两档都全部 9 条 PASS 且 `RESULT-OFFLINE: PASS`，末行 `RESULT: PASS`，exit 0。这是本计划的收口点，也是 `shell_mutate.py` 里 `no_sticky` 等变异从 INVALID 转成可证明的前提。编号全绿但 `RESULT-OFFLINE` 红时末行是 `RESULT: FAIL(0/9)`（分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母），所以这一步同时看 exit 码与那一行本身。
 
 **实测（2026-10-01）**：1440 与 1024 两档均 9/9 PASS、`RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0`、末行 `RESULT: PASS`、exit 0。`RESULT9` 转绿（两档同）：`display=block overflowX=0 错误=[]`。`RESULT7` 两档逐字等于预期：`chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901` —— 数字没动，降级段没有泄漏到桌面宽度。
+> 更正（Task 4 fix round 1）：上面这句以及本步 Expected 里的「9 条」是当时那次运行的记录，保留原话。fix round 1 之后编号断言是 **10 条**（新增 `RESULT10` 量窄屏 chat 竖向装不装得下），Expected 应读作「两档全部 10 条 PASS」，`FAIL(0/9)` 读作 `FAIL(0/10)`；分母由 `len(RESULTS)` 自己算，加一条自动变 10，没有人手改过它。新实测见本任务末尾的 fix round 1 小节。
 
 - [x] **Step 3: 跑全量变异，把 9 条断言（11 个变异）一次证明干净**
 
@@ -1154,6 +1206,7 @@ Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_stic
 > 更正（Task 4 实测之后）：上一句在 Task 4 已不成立 —— 全 11 条跑出来的共现是 **6 条**（`grid_one_col` 变三红、`ws_container_gone`/`ws_min_width` 各多一条 RESULT9），名单与成因见下面 Task 4 的实测段。本段是 Task 2 那次 8 条变异（RESULT9 还恒红）的记录，保留原话。
 
 **实测（2026-10-01，全 11 条）**：首行 `变异前基线红项：全绿`，11 行全部 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0；0 SKIP、0 INVALID、0 ANCHOR、无还原失败。`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次。四对预告 COLLATERAL 中三对逐字符合：`sidebar_w_zero → ['RESULT1', 'RESULT2']`、`sidebar_class_gone → ['RESULT1', 'RESULT5']`、`nav_dup → ['RESULT5', 'RESULT6']`；`grid_one_col` 实测为 `['RESULT1', 'RESULT2', 'RESULT7']`，比 Task 3 那份记录多出 RESULT7。**已用对照实验证明与本任务降级段无关**：把降级段整段临时移除（字节还原到写前状态，`git hash-object` 前后同为 `07d4ee7f…`），单跑 `grid_one_col`，collateral 仍是 `['RESULT1', 'RESULT2', 'RESULT7']`（基线红项此时为 `['RESULT9']`，故 RESULT9 不进新红名单）。成因是 `a6e0979` 给 RESULT7 补的绝对上限 `bottom <= vh + 1`：单列 grid 把工作区推到 y=900，chatBottom≈1720 必然超上限，而算术恒等式半边仍成立 —— Task 3 的「没有撞到 RESULT7」名单是旧版 RESULT7（无上限）下录的，此后认账以三红为准，这是 harness 演进后的结构必然，不是锚点撞错。另两条本轮才可见的 COLLATERAL：`ws_container_gone → ['RESULT2', 'RESULT9']`、`ws_min_width → ['RESULT4', 'RESULT9']` —— RESULT9 基线转绿后「相对基线新红」才数得进它（Task 4 之前 RESULT9 恒红，永远进不了新红名单），两条的成因都是工作区宽度被破坏后 390 窄屏跟着溢出/容器查询失配，同属结构必然。
+> 更正（Task 4 fix round 1）：本步标题里的「9 条断言（11 个变异）」与上面这份实测是当时那轮的记录，保留原话。fix round 1 之后是 **10 条断言 / 12 个变异**（新增 `nav_h_gone` 证 `RESULT10`），共现名单从 6 条变 **7 条**（`chat_vh_old` 多打红 `RESULT10`），逐字实测见本任务末尾的 fix round 1 小节与 Task 6 Step 2 的白名单。另：`sidebar_class_gone` 那一轮**曾经整轮中止**（第一版 `NARROW_CHAT` 探针直接 `.sidebar.getBoundingClientRect()`，类被摘掉时抛 TypeError 把子进程打挂，驱动按「没走完 main()」中止）—— 那是本轮新加断言引入的缺陷，已修（探针改为对缺 `.sidebar` 保持哑、`RESULT10` 只把 `sidebarH` 当解释量），修后 12 条全绿。
 
 
 - [x] **Step 4: Commit**
@@ -1164,6 +1217,54 @@ git commit -m "feat(shell): 窄屏侧栏降级为顶部横滑导航"
 ```
 
 **实测（2026-10-01）**：commit `15ec01a`（仅 `assets/css/styles.css`，1 file changed, 18 insertions），两点「注意」与 grid_one_col 三红的附注均写入 commit 说明；提交后 `git status --short` 为空。
+
+#### Task 4 fix round 1（2026-10-01）：窄屏 chat 页竖向装不下
+
+**触发**：Task 4 评审 spec ✅ / quality Approved，Critical 0、Important 1、Minor 4。Important 的内容是 —— 降级段那句「等价改壳前的观感」不成立：chat 页在窄屏**竖向**溢出，而 harness 对此全盲（`RESULT9` 只量 dashboard 的**横向**）。评审给的处方是「在降级段覆盖 `--ws-pad-t/--ws-pad-b`」加「另想办法减掉顶栏高度」，或记为已知代价。
+
+**先坐实，再定位（scratch 探针 `F:/tmp/task3/nav_h_probe.py`，未动仓库 harness）**：390×780 → `sidebarH=111 chatTop=131 chatH=672 chatBottom=803 scrollH=863 overflowY=83`；W∈{280,320,360,390,414,480,560,640,720,760} × H∈{640,780} 十八档里 `sidebarH` 恒为 111、`overflowY` 恒为 83。两条根因叠加：
+
+1. 降级段只写了字面 `padding: 20px 16px 60px`，没同步 `.chat-wrap` 高度算式真正读的那两个 token —— 它们仍停在 `:root` 的 28/80，于是 `chatH = vh − 108 = 672`（按降级内补本该是 `vh − 80 = 700`）。
+2. **没有任何一项减掉叠上来的 111px 顶部导航**。改壳前那条 `calc(100vh - 168px)` 常量把顶栏高度折在里面；Task 3 把常量换成 token 时，这层折叠丢了。
+
+溢出量 = `111 − 28 = 83`，与实测逐字相符 —— 这解释了为什么它在十档宽度下是同一个数。
+
+**采纳发现，不采纳处方**：`Task 4: Ruling: 采纳这条 Important 的**发现**，不采纳它的**处方**`（全文在账本）。处方单独执行的后果是可证的，不是推测的：第 12 条变异 `nav_h_gone` 就是把 `--nav-h: 111px` 改回 `0px` 而保留降级内补 token，即「只覆盖 token」那一半 —— 实测 `chatH 672→700`、`overflowY 83→111`，**更坏**。所以修法是两半一起做：
+
+- `:root` 新增 `--nav-h: 0px`（桌面侧栏在工作区左边，不占竖向）。
+- 降级段内 `.workspace` 同时改三个 token：`--nav-h: 111px`、`--ws-pad-t: 20px`、`--ws-pad-b: 60px`，字面 padding 改读这三个 token。
+- `.chat-wrap` 基规则改为 `height: calc(100vh - var(--nav-h) - var(--ws-pad-t) - var(--ws-pad-b))`。
+
+**为什么不在降级段里再写一条 `.chat-wrap` 覆盖**：同特异度按源序，基规则在文件后部（约 `:2072`）会赢过降级段（约 `:212`），写了是死的。把「侧栏在不在顶部」这件事收敛成一个 token，是为了让降级段不必和文件后部的规则抢源序。
+
+**把性质升成门禁**（本计划第二处「实现任务改门禁」，与 Task 3 改 RESULT7 同类）：新增 `RESULT10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）`，判据两半全部现量、除 ±1 容差不含任何常量 —— `document.documentElement.scrollHeight - innerHeight <= 0`（别的元素也别溢出）**且** `chat-wrap.bottom + workspace.paddingBottom <= innerHeight + 1`（chat 的高度算式确实减掉了顶栏）；两半各自能单独红。加这条而不是只修 CSS 的理由：今天没有任何断言覆盖它，我是靠临时探针才发现的；只修不加断言，下次谁动降级段的 padding 就静默重演 83px。
+
+**实测（fix round 1，2026-10-01）—— 两档 harness**：`shell_check.py`（1440）与 `shell_check.py 1024` 均 exit 0，10/10 编号断言 PASS + `RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0`，末行 `RESULT: PASS`。两档逐字相同的两条：
+
+```
+RESULT7: PASS  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901
+RESULT10: PASS  10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）  sidebarH=111 chatH=589 chatBottom=720 + padB=60 <= vh+1=781 scrollH=780 overflowY=0
+```
+
+`RESULT7` 的数字与 Task 3/4 逐字相同（`chatBottom=820`，`--nav-h` 在桌面是 0，所以恒等式没被窄屏那条改动污染），说明降级专属的 token 泄漏不到桌面宽度。`chatH=589` 是 `780 − 111 − 20 − 60 = 589`，且 ≥ `min-height: 520` 的地板。
+
+**实测（fix round 1）—— 全 12 条变异**：exit 0，首行 `变异前基线红项：全绿`，12 行全 `OK 变红`，末行 `全部断言已被证明会变红`；0 SKIP / 0 INVALID / 0 ANCHOR / 0 BAD。新增两条相关：
+
+```
+chat_vh_old: OK 变红  期望 RESULT7 红，实际 ['RESULT7', 'RESULT10']
+nav_h_gone: OK 变红  期望 RESULT10 红，实际 ['RESULT10']
+        证据 RESULT10: FAIL  10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）  sidebarH=111 chatH=700 chatBottom=831 + padB=60 <= vh+1=781 scrollH=891 overflowY=111
+```
+
+`nav_h_gone` 是 `RESULT10` 非空跑的证据（摘掉导航减项 → 溢出正好回到 111），不带 COLLATERAL。`chat_vh_old` 的锚点被重新指到新的基表达式上，因此它现在同时打红 RESULT7 与 RESULT10 —— 共现名单从 6 条变 **7 条**，白名单与成因见 Task 6 Step 2。
+
+**两处本轮控制器自己的错，记在这里因为它们是证据的一部分**：
+1. 第一版 `NARROW_CHAT` 探针直接 `.sidebar.getBoundingClientRect()`，`sidebar_class_gone` 变异摘掉该类时抛 `TypeError`，子进程没有末行 `RESULT:` 汇总 → 驱动按「这一轮一条都没量到」中止整轮（`shell_mutate.py:86-107` 的那条一票否决）。这是本轮新增断言引入的缺陷，不是驱动的误判；探针改成对缺 `.sidebar` 保持哑、`sidebarH` 只当解释量后 12 条跑通。**附注**：我先前把实现方加的保护判成「越权改动」并回退过一次 —— 判错了，那是对我方缺陷探针的正当规避。
+2. 我在读盘之前先「记得」`shell_check.py` 的内容（声称有 13 条编号断言与三条读不存在探针键的 RESULT），并在那份幻觉状态上推理了一轮。逐字节 diff 证伪。此后本计划里所有 harness 事实一律来自当轮实跑输出。
+
+**登记的代价与裁定**：`vh < 711`（= 520 地板 + 111 导航 + 20 + 60）时 520 起跳、窄屏 chat 重新出现竖向滚动 —— 与改壳前同类（390×640：`640 − 168 = 472 < 520`），`min-height: 520px` 因此**不动**，代价写进 Task 6 Step 5 人眼清单。`.sidebar-foot { margin-top: 0 }` 是评审证明的死声明（基值 `auto` 在 `height: auto` 的列 flex 里本就解析为 0），**保留不删**（brief 逐字且自解释）。断点 760 不改数字，改为补上推导与两条硬约束（见 Task 4 Step 1 的补记）。`15ec01a` 的 commit 说明里那句「降级形态比桌面晚 32px 命中」基准标错（对桌面是晚 **296px**；32px 只对改壳前的 `V = T` 成立），按房规不 amend，更正落在本计划与账本。
+
+**本轮改的计数与没改的计数**：前瞻性文本全部按新口径改过 —— 文件结构表（10 条断言 / 12 个变异）、Task 6 Step 1（10 条 + `FAIL(0/10)`）、Step 2（12 行 + 7 条共现白名单，新增 `chat_vh_old → ['RESULT10','RESULT7']` 那行）。历史段与已消费的交接段**不回改**（Task 1 的改壳前基线、Task 3 实测段那句「9 条编号断言与 FAIL(n/9) 分母没动」、Task 3 给 Task 4 的交接段「跑全 11 条」），它们记录的是当时的运行，按 Task 3 立下的「逐字一致」口径只认编号/红项集合/末行/exit；集中更正落在 Task 4 Step 2/3 后面的两条 `> 更正（Task 4 fix round 1）` 与本小节。
 
 ---
 
@@ -1271,9 +1372,10 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 
 ## Task 6: 端到端总验收
 
-- [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（9 条编号断言；离线行红时末行是 `RESULT: FAIL(0/9)`，以 exit 码为准）
-- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0
-  **`COLLATERAL` 白名单（Task 4 全 11 条实测，控制器 2026-10-01 复跑逐字相同）—— 6 条共现全是预期的，少一条或多一条都要停下来查**：
+- [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（10 条编号断言；离线行红时末行是 `RESULT: FAIL(0/10)`——分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母 —— 所以这一档要同时看 exit 码和那行本身，以 exit 码为准）
+- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **12** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止），12 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0。
+  **离线门在这个驱动里只在红的时候说话**：`shell_mutate.py:121-123` 是「看到 `RESULT-OFFLINE: FAIL` 就 `SystemExit` 并打出整段 stdout」，绿路径不打印那一行，所以本步的正确期望是「输出里没有 OFFLINE 行且首行是 `全绿`」，不是「有一行 `RESULT-OFFLINE: PASS`」——去找一行永远不会出现的文本，要么误判成 harness 坏了，要么把「没看到」当通过。Task 1 写这条时按 harness 的口径抄了过来，抄错了对象，2026-10-01 读码更正。
+  **`COLLATERAL` 白名单（Task 4 fix round 1 后全 12 条实测，控制器 2026-10-01 复跑逐字相同）—— 7 条共现全是预期的，少一条或多一条都要停下来查**：
   | 变异 | 目标 | 实测新红集合 | 成因 |
   |---|---|---|---|
   | `sidebar_w_zero` | RESULT1 | `['RESULT1','RESULT2']` | 侧栏宽 0 → 工作区 x=0，RESULT2 量的正是 x=264 |
@@ -1282,7 +1384,8 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   | `ws_min_width` | RESULT4 | `['RESULT4','RESULT9']` | `min-width: 0` 换成 1200px → 12 页各 `+24px`，390 档同样溢出 |
   | `sidebar_class_gone` | RESULT5 | `['RESULT1','RESULT5']` | 去掉 `.sidebar` 类本身，而 RESULT1 量的就是它 |
   | `nav_dup` | RESULT6 | `['RESULT5','RESULT6']` | 复制出的那份导航在 `.sidebar` 内 → `navInSidebar` 12→13 |
-  其余 5 条（`no_sticky`/`page_id_gone`/`chat_vh_old`/`modal_container`/`narrow_no_degrade`）**不带** `COLLATERAL`，只红目标那一条。撞错对象长得完全不同：`BAD 没变红`（目标没红）或 `INVALID`（目标在变异前就红）。
+  | `chat_vh_old` | RESULT7 | `['RESULT10','RESULT7']` | fix round 1 新增：锚点现在换的是 `height: calc(100vh - var(--nav-h) - …)` 那条**基规则**，退回 168px 常量的同时把窄屏该减的导航减项一起摘了 → RESULT10 同红。集合按编号前导整数排序打印，所以是 `RESULT10` 在 `RESULT7` 前面 |
+  其余 5 条（`no_sticky`/`page_id_gone`/`modal_container`/`narrow_no_degrade`/`nav_h_gone`）**不带** `COLLATERAL`，只红目标那一条。撞错对象长得完全不同：`BAD 没变红`（目标没红）或 `INVALID`（目标在变异前就红）。
   **变异表之外还要补跑一次 RESULT7 的上限那半**（表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
 - [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
 - [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
@@ -1292,7 +1395,13 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   - 左栏 12 项的指认难度、`.nav-link.active::before` 那 3px 竖条够不够强（不够就调 Task 2 Step 4 的 `.sidebar .nav-link` 内边距/`gap`，别留成待办）；宽屏上会出现两条滚动线（sticky 侧栏 + 文档滚动），确认它看着是设计而不是坏了。
   - 1024 档助手页退两栏（容器 696 ≤ 800 → `.chat-tools` 隐藏）是否仍好用。
   - **模态里的 `.grid-3`**：`metrics.js:534` 渲染 `<div class="grid grid-3">` 在模态内，Task 3 的容器化让它现在塌成 2 列（模态内容盒实测 **590** ≤ 916，走 `.grid-3,.grid-4 → repeat(2,1fr)` 那条；576 那条 `→ 1fr` 不触发）。方向上是想要的（与 `.editor-layout` 同一个既有 bug 家族），但**没有任何断言覆盖它**，只能看。评审已排除其它在模态内渲染的候选（`.metrics-dashboard`/`.cal-stats`/`.calendar-grid`/`.cal-week-grid`/`.card-design-layout`/`.hr-topic-*`/`.platform-compliance-grid` 都是页面级渲染；`.modal-lg` 目前无人引用），所以爆炸半径就是 `.grid-3/.grid-4` + `.editor-layout`。
+  - **761..823 这一段没人看过**（fix round 1 记的账）：它是「15 条容器规则已全部收到最窄形态，但侧栏还没降级」的区间。断点 760 的两条硬约束是 `< 1024`（Tauri `minWidth`，桌面包永不进降级）与 `≤ 824`（= 496 + 264 + 64，最后一条容器规则收完的视口），760 同时满足；但 harness 只在 761 与 800 两档实测过这一族宽度（两档都 10/10 PASS + exit 0），中间宽度是算术推出来的、不是量出来的。把窗口在这段里拖一拖，看侧栏那 12 项在工作区被压到 ~430px 时有没有挤坏。
+  - **矮视口（`vh < 711`）窄屏 chat 会重新出现竖向滚动 —— 这条是设计代价，不是回归**：`.chat-wrap` 的 `min-height: 520px` 地板起跳（520 + 降级导航 111 + padT 20 + padB 60 = 711）。`RESULT10` 钉在 vh=780，量不到这一档；改壳前同样如此（390×640：`640 - 168 = 472 < 520` → 也是 520、也溢出），所以 Task 4 fix round 1 明确不动地板。要看的是：手机横屏/小窗口下 chat 输入框滚动一次就够得着，且不把别的内容顶出视口。
 - [ ] **Step 6:** 线上：部署后跑一次 `cors_check.py` 对照 + 在手机宽度（390）逐页翻一遍
+  390 这一档的具体看点（fix round 1 加的，别只翻 dashboard —— `RESULT9` 量的就是 dashboard，其余页的竖向表现此前无人覆盖）：
+  - **chat 页输入框不滚动就能碰到**（这就是 `RESULT10` 那条性质的真人口径；它 2026-10-01 之前是红的：390×780 下溢出 83px，输入框落在折叠线以下）。
+  - 「降级 = 等价改壳前的观感」这句**只是近似**：改壳前是 brand + nav 同一行内联、整条 `position: sticky`；降级后是 brand/nav/foot 竖排、`position: static`，也就是**顶部导航会随着文档滚走**。如果这在你看来是不可接受的，那要改的是 Task 4 降级段的定位，不是把 `RESULT10` 的判据挪开。
+  - 顶部导航横滑（`.sidebar .nav` 实测 scrollW 恒 1030，十档宽度不换行）在真机上手指滑动是否顺；`.sidebar-foot` 在降级后是否还在碍事（它现在 `margin-top: 0`，Task 4 评审证明那条是死声明，保留而非删除）。
 
 ---
 
