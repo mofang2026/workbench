@@ -209,6 +209,24 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   container-name: ws;
 }
 
+/* ── 窄屏：侧栏降级为顶部横滑导航（等价改壳前） ── */
+@media (max-width: 760px) {
+  .app-shell { display: block; }
+  .sidebar {
+    position: static;
+    height: auto;
+    gap: 10px;
+    padding: 12px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .sidebar .nav { flex-direction: row; gap: 4px; overflow-x: auto; }
+  .sidebar .nav-link { padding: 8px 14px; white-space: nowrap; }
+  .sidebar .nav-link.active::before { display: none; }
+  .sidebar-foot { margin-top: 0; padding-top: 0; border-top: 0; }
+  .workspace { padding: 20px 16px 60px; }
+}
+
 /* ── 卡片 ── */
 .card {
   background: var(--surface);
