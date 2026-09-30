@@ -1,6 +1,9 @@
 -- ============================================================================
 -- 全域自媒体工作台 · Supabase 建表脚本
 -- 执行位置：Supabase Dashboard → SQL Editor → 粘贴运行
+-- 本文件是当前结构的完整快照，全新库只需执行本文件。
+-- migration_*.sql 是已部署库的历史增量，其中 keywords / video_scripts /
+-- contents.compliance_report 已折入本文件（对象名保持一致，重跑幂等）。
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -100,6 +103,9 @@ create table if not exists public.contents (
 
   -- 质检快照（哪几个平台自检通过）
   qa_snapshot jsonb default '{}'::jsonb,
+
+  -- AI 违规自检报告（原 migration_compliance.sql，已折入本快照）
+  compliance_report jsonb,
 
   priority int default 0,
   tags text[] default '{}',
@@ -231,6 +237,51 @@ create table if not exists public.qa_checklist_templates (
 );
 
 -- ----------------------------------------------------------------------------
+-- 10. 关键词管理库 (U11，原 migration_keywords.sql，已折入本快照)
+-- ----------------------------------------------------------------------------
+create table if not exists public.keywords (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  word text not null,                       -- 关键词
+  category text,                            -- 分类：行业词/长尾词/情绪词/话题词/竞品词
+  platform text check (platform in ('xhs','douyin','bilibili','wechat','all')),
+  track text,                               -- 适用赛道
+  hot_score int default 0,                  -- 热度评分 0-100
+  status text default 'active' check (status in ('active','watching','deprecated')),
+  source text,                              -- 来源：选题聚合/手动添加/外部导入
+  notes text,                               -- 备注
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- 唯一约束：同用户同词同平台不重复（NULL 平台视为 'all'）
+-- 注：UNIQUE 约束不支持表达式，改用唯一索引实现
+create unique index if not exists uq_keywords_user_word_platform
+  on public.keywords(user_id, word, coalesce(platform, 'all'));
+
+create index if not exists idx_keywords_user on public.keywords(user_id);
+create index if not exists idx_keywords_category on public.keywords(user_id, category);
+
+-- ----------------------------------------------------------------------------
+-- 11. 视频脚本工场 (原 migration_video_scripts.sql，已折入本快照)
+--     platform 存中文显示名（抖音/小红书/...），与其他表的平台 key 约定不同
+-- ----------------------------------------------------------------------------
+create table if not exists public.video_scripts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  title text not null default '',
+  type text not null default 'short',         -- short | oral | vlog | tutorial
+  duration text default '',                   -- 30s | 60s | 3min ...
+  platform text default '',                   -- 抖音 | 小红书 | B站 | 公众号
+  hook text default '',                       -- 前3秒hook
+  shots jsonb default '[]'::jsonb,            -- 分镜数组
+  ending text default '',                     -- 结尾引导
+  summary text default '',                    -- 脚本概要
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ----------------------------------------------------------------------------
 -- RLS 策略：每个用户只能访问自己的数据
 -- ----------------------------------------------------------------------------
 alter table public.profiles enable row level security;
@@ -243,6 +294,8 @@ alter table public.metrics enable row level security;
 alter table public.templates enable row level security;
 alter table public.platform_rules enable row level security;
 alter table public.qa_checklist_templates enable row level security;
+alter table public.keywords enable row level security;
+alter table public.video_scripts enable row level security;
 
 -- profiles: 本人可读写
 drop policy if exists "profiles_self_read" on public.profiles;
@@ -257,12 +310,19 @@ drop policy if exists "contents_owner_all" on public.contents;
 drop policy if exists "schedules_owner_all" on public.schedules;
 drop policy if exists "assets_owner_all" on public.assets;
 drop policy if exists "metrics_owner_all" on public.metrics;
+drop policy if exists "keywords_owner_all" on public.keywords;
 create policy "accounts_owner_all" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "topics_owner_all" on public.topics for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "contents_owner_all" on public.contents for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "schedules_owner_all" on public.schedules for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "assets_owner_all" on public.assets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "metrics_owner_all" on public.metrics for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "keywords_owner_all" on public.keywords for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- video_scripts：沿用迁移里已部署的策略名，重跑时是替换而非新增第二条策略
+drop policy if exists "用户管理自己的视频脚本" on public.video_scripts;
+create policy "用户管理自己的视频脚本" on public.video_scripts for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- templates: 本人私有 + 系统内置所有人可读
 drop policy if exists "templates_read" on public.templates;
@@ -290,12 +350,18 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['accounts','topics','contents','schedules','platform_rules']
+  foreach t in array array['accounts','topics','contents','schedules','platform_rules','keywords']
   loop
     execute format('drop trigger if exists trg_%s_touch on public.%s;', t, t);
     execute format('create trigger trg_%s_touch before update on public.%s for each row execute function public.touch_updated_at();', t, t);
   end loop;
 end$$;
+
+-- video_scripts：沿用迁移里已部署的触发器名，重跑时是替换而非新增第二个触发器
+drop trigger if exists trg_video_scripts_updated on public.video_scripts;
+create trigger trg_video_scripts_updated
+  before update on public.video_scripts
+  for each row execute function public.touch_updated_at();
 
 -- ============================================================================
 -- 平台扩展迁移：新增 视频号(shipinhao)/快手(kuaishou)/微博(weibo)/今日头条(toutiao)
@@ -343,5 +409,7 @@ begin
 end$$;
 
 -- ============================================================================
--- 完成。执行后请到 Table Editor 检查 9 张表是否创建成功。
+-- 完成。执行后请到 Table Editor 检查 12 张表是否创建成功
+-- （profiles / accounts / topics / contents / schedules / assets / metrics /
+--   templates / platform_rules / qa_checklist_templates / keywords / video_scripts）。
 -- ============================================================================

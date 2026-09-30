@@ -1,5 +1,6 @@
 -- 视频脚本工场 · 迁移脚本
 -- 创建 video_scripts 表
+-- 注：本表已折入 schema.sql。全新库无需执行本文件，它只用于升级已部署的旧库。
 
 create table if not exists public.video_scripts (
   id uuid primary key default gen_random_uuid(),
