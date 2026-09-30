@@ -1461,7 +1461,8 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   | `nav_dup` | RESULT6 | `['RESULT5','RESULT6']` | 复制出的那份导航在 `.sidebar` 内 → `navInSidebar` 12→13 |
   | `chat_vh_old` | RESULT7 | `['RESULT10','RESULT7']` | fix round 1 新增：锚点现在换的是 `height: calc(100vh - var(--nav-h) - …)` 那条**基规则**，退回 168px 常量的同时把窄屏该减的导航减项一起摘了 → RESULT10 同红。集合按编号前导整数排序打印，所以是 `RESULT10` 在 `RESULT7` 前面 |
   其余 6 条（`no_sticky`/`page_id_gone`/`modal_container`/`narrow_no_degrade`/`nav_h_gone`/`chat_rail_tall`）**不带** `COLLATERAL`，只红目标那一条。撞错对象长得完全不同：`BAD 没变红`（目标没红）或 `INVALID`（目标在变异前就红）。
-  **变异表之外还要补跑一次 RESULT7 的上限那半**（表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
+  **变异表之外还要补跑一次 RESULT7 的上限那半**（**为什么表里没有它**：13 条变异里没有一条以「上限」为目标 —— `chat_vh_old` 咬的是恒等式那半（现量 `chatBottom=760 ≠ 期望 820`，而 `760 <= vh+1=901` 满足，上限根本不咬）；唯一让上限单独咬的是 `grid_one_col`，可它是作为 RESULT2 的共现红出现的（Task 4 fix round 1 实测：恒等式成立、`chatBottom≈1720` 超 `901`）。一条判据只在别人名下当过共犯，就等于没被单独证过 —— 所以要补跑）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
+  > 更正（2026-10-01 终审）：这一句原来写的是「表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行」—— 那个指认是**错的**：Task 1 Step 4 的块是 11 条变异的运行输出，全计划没有一张带行号的「映射表」，按图索骥会找不到东西。上面括号里的理由才是真的，且已按 `chat_vh_old`/`grid_one_col` 两条的现量证据重写。
 
   **实测（2026-10-01，两半都跑了）**：
 
@@ -1513,6 +1514,35 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   - `vh < 711` 的地板档（手机横屏/小窗口）本轮仍未量：`RESULT10` 钉在 vh=780，Chromium 里可以伪造但要另写探针，而它的真机意义（横屏手持设备）本来也只能真人看。留给人眼清单。
 
 ---
+
+## 终审：whole-branch review（2026-10-01）
+
+**覆盖范围** `19fa8df..HEAD` 全 24 个 commit（Task 0 的三个基线 commit 到本次终审），重点按 Task 5 的 Ruling 压在 `8dfb34b..HEAD` —— Task 4 fix round 1、Task 5、Task 6 这段是控制器自执行自评审，**独立 subagent 评审没有做过**（用户当轮对 `Agent` 派发回了 `[Request interrupted by user for tool use]` + `继续`）。这条限制本身就记在这儿，不要读成「终审是外部视角」。
+
+**机械复核（全部当场跑，不采信前文）**：
+
+| 检查 | 命令口径 | 结果 |
+|---|---|---|
+| 面上有没有跑偏 | `git diff --stat 19fa8df..HEAD` 25 个文件 | 全在 `assets/` `index.html` `docs/` `supabase/`；无 `dist/`、无 `.env`、无 `node_modules`（`--diff-filter=A` 再筛一次为空） |
+| 密钥有没有进历史 | 四种形态各扫一遍整条 diff（4154 行），**只打数量** | `sk-` 0 / JWT 0 / `key:=长串` 0 / `supabase.co` 0 |
+| 全局约束还成立吗 | `package.json` / `api/` / `src-tauri/tauri.conf.json` 的 diff | 三者改动均为 0 —— 零新依赖、零新后端、零构建步骤没被悄悄破 |
+| 语法 | `node --check` 遍历 22 个 JS | 全过，0 失败 |
+| 空白 | `git diff --check` | 空 |
+| CSS 不变量 | `--nav-h` 出现 3（2 声明 + 1 使用）、`@container ws (max-width:` 15、`@media (max-width: 760px)` 1、`100vh - 168px` 残留 0 | 全部对得上 |
+| token 消费者 | `grep 'var(--ws-pad'` → 只有 `.workspace` 基规则、降级段、`.chat-wrap` 三处 | 没有第四处还停在 28/80（那正是 fix round 1 的半个根因） |
+| 壳的降级闭合 | `.sidebar { position: static; height: auto; }` 在 `@media` 内 | 基规则的 `height: 100vh` 被复位，降级后不会把 900px 高的侧栏压在内容上面 |
+| dist 现状 | 六个关键文件 `cmp` + 计数 | 逐字节相同；`dist_scripts=25 dist_jsfiles=22 missing=[]`（Task 5 关的那道陷阱当下没重新张开） |
+
+**发现与处置（4 条，2 修 2 记）**：
+
+1. **已修（文档缺陷）**：Task 6 Step 2 里「变异表之外还要补跑」那句的指认 `见 Task 1 Step 4 的映射表第 7 行` 是**错的** —— 全计划没有带行号的映射表，Task 1 Step 4 那块是 11 条变异的运行输出。已按两条真实证据重写括号里的理由（`chat_vh_old` 咬恒等式：现量 `760 ≠ 820` 而 `760 <= 901` 满足；唯一让上限单独咬的 `grid_one_col` 只是 RESULT2 的共犯），并按房规以 `> 更正` 追加、不改写历史块。
+2. **已修（注释过度声称）**：`--nav-h: 111px` 旁边那句「盯着它的是 RESULT10」是无条件的，实测只成立一半 —— 把 token 改小到 80：`chatH=620 chatBottom+padB=811 > vh+1=781 scrollH=811` → `RESULT10 FAIL`、`exit=1`；把 token 改大到 140：`chatH=560 691+60=751 <= 781 scrollH=780` → **`RESULT10 PASS`、`exit=0`**，只在工作区底下留一条空隙。也就是「导航改高」会被抓、「导航改矮」抓不到，注释已改成把两个方向的现量都写进去，并点明改矮那一半只能靠重量的人。改完复跑 `shell_check.py`：`RESULT10` 与 `RESULT: PASS` 逐字未变（纯注释改动，行为为 0）。
+3. **登记不修（先于本计划存在）**：侧栏 12 个导航项是 `<a class="nav-link" data-page=…>`，**没有 `href`、没有 `tabindex`、没有 `role`** —— 不可 Tab 聚焦、读屏也不会报成链接。实测 `git show ad34f3d~1:index.html:69` 改壳前就是同一串标记，本轮只把它从顶部搬进侧栏，没有引入也没有加重。修法（`href="#"` + `role="tab"` 或改 `<button>`）会牵动 `app.js` 的事件委托，超出「改壳」授权，留给用户点头。
+4. **登记不修（措辞 vs 证据强度）**：Task 5 加进设置页的那句「线上版三家模型均已验证支持浏览器跨域调用」，其证据是 CORS **preflight** 放行（`cors_check.py` 三行 PASS），不含带真实 Key 的 `POST` 成功。判定：这句话的字面宾语就是「跨域调用」，与所测一致，没有越界；而改它会让 Task 5 Step 2 里逐字引用的那段实测记录失效（房规：历史实测只追加不改写）。所以记为**看过并保留**，不是漏看。真要收紧成「已验证三家均放行浏览器跨域请求（CORS）」得连计划记录一起补更正块，属另一轮。
+
+**终审结论**：代码面 0 处需要回退；两处修的都是文档/注释的准确性，不影响任何断言。计划里所有前瞻性计数（10 条断言 / 13 个变异 / 7 条 COLLATERAL）与磁盘上的 harness 一致；历史「实测（…）」块一律保留原话，纠正以 `> 更正` 追加。
+
+
 
 ## 附录 A：如果拒绝容器查询（备选实现，代价与数字都在这）
 

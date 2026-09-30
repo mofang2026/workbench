@@ -233,7 +233,10 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
      28/80，chat 高度算式读的是 token）。111 是 .sidebar 降级后的实测高度，2026-10-01 量于
      W280..W760 十个宽度、恒为 111（导航横滑单行不换行）；改 .sidebar 的 padding 12px 16px、
      gap 10px 或 .nav-link 的 padding 8px 14px 任一处都要重量，别照抄这个数。
-     盯着它的是 RESULT10。 */
+     盯着它的是 RESULT10，但只盯得住一个方向：导航改高（token 相对偏小）会溢出、当场红
+     （2026-10-01 现量把 token 改成 80 → chatH=620、chatBottom+padB=811 > vh+1=781、FAIL exit 1）；
+     导航改矮（token 相对偏大）只会在工作区底下留一条空隙，RESULT10 是绿的（改成 140 →
+     chatH=560、691+60=751 <= 781、PASS）。所以「改矮」这一半只能靠重量的人，别指望门禁。 */
   .workspace {
     --nav-h: 111px;
     --ws-pad-t: 20px;
