@@ -1290,7 +1290,7 @@ chat_rail_tall: OK 变红  期望 RESULT10 红，实际 ['RESULT10']
 - Consumes: `ai-gateway.js:466-470`（`requireDirect()` 的报错文案）、`chat.js:296`（`" · 代理模式不支持工具，请切直连"`）
 - Produces: 一条可复跑的线上前置检查；不新增后端
 
-- [ ] **Step 1: 把 CORS 结论落成可复跑脚本**
+- [x] **Step 1: 把 CORS 结论落成可复跑脚本**
 
 `F:\Qoder\自媒体\.verify-shell\cors_check.py`：
 
@@ -1330,6 +1330,8 @@ moonshot: PASS  {"access-control-allow-credentials": "true", "access-control-all
 
 exit=0（脚本不置退出码，靠三行 `PASS` 判定；要接 CI 就自己 `raise SystemExit`）。注意 zhipu 的 `allow-headers` 带空格（`authorization, content-type`），所以判定用的是 `in`，不是相等。
 
+**复跑（2026-10-01，Task 5 执行时，逐字与上面那段 2026-09-30 的实测相同）**：三行全 `PASS`、exit=0，`deepseek` / `zhipu` / `moonshot` 各自回显 `access-control-allow-origin: https://workbench.shuncheng.xin`、`allow-methods` 含 `post`、`allow-headers` 含 `authorization`。磁盘上的 `F:\Qoder\自媒体\.verify-shell\cors_check.py`（1197B）与本步围栏块逐字节相同（`sync_blocks.py` 的 `块#24 ... EOL归一后相同: True`）—— 也就是说这一步没有新产物，它做的是「把 2026-09-30 那次结论续到今天」，Step 2 那句要写进用户界面的文案就靠这条撑着。
+
 这条实测支持的结论：**线上版 Agent 走直连即可，不需要给代理补 `tools` 透传。** 若某家日后变 FAIL，才回到「给 `api/ai/` 加一个转发 `messages/tools/tool_calls` 的 agent 路由」这条备选路（约需新增 1 个 api 文件 + 流式 `delta.tool_calls` 拼接，工作量参考 `ai-gateway.js:521-535`）。
 
 两个不能从这条实测里多读出来的东西，写清楚免得日后被当依据：
@@ -1337,7 +1339,7 @@ exit=0（脚本不置退出码，靠三行 `PASS` 判定；要接 CI 就自己 `
 - `Origin` 用的是 `https://workbench.shuncheng.xin`。三家都回显来源（等于 `*` 的宽松策略），换域名不会变 FAIL；但如果哪家改成白名单，脚本会立刻红，这是它继续存在的意义。
 
 
-- [ ] **Step 2: 文案对齐实测结论**
+- [x] **Step 2: 文案对齐实测结论**
 
 `settings.js:266` 那行 `<strong>ℹ 代理模式说明</strong>…密钥不会泄露。` 之后、`</div>`（`:267`）之前插入一句（口径与 `chat.js:296` 的 `" · 代理模式不支持工具，请切直连"` 一致，颜色类沿用同文件已在用的 `text-xs muted-2`）：
 
@@ -1351,7 +1353,22 @@ cd "/f/Qoder/自媒体/自媒体工作台/workbench" && node --check assets/js/s
 ```
 Expected: `node --check` 无输出（语法通过），计数 `1`。再跑 `shell_check.py` 的 RESULT3（`JS错误=[]`）确认渲染设置页没有 pageerror。
 
-- [ ] **Step 3: 密钥边界写清楚（这是安全结论，不是可选说明）**
+**实测（2026-10-01）**：`node --check assets/js/settings.js` 无输出、exit 0；`grep -c "助手页在代理模式下不可用"` = **1**；`shell_check.py`（1440 档）`RESULT3: PASS  3 12 页均有内容且无未捕获异常  空页=[] JS错误=[]`，末行 `RESULT: PASS`、exit 0（顺带 10/10 全绿，这条文案改动没有牵连布局）。`settings.js` 改后 25679B / 629 行 / **100% LF、裸 CRLF 0** —— 该文件本来就是 LF，编辑工具保持了原样。
+
+落点比 brief 写的 `:264-267` 早一行：插入位置实测在 `:265`（`<strong>ℹ 代理模式说明</strong>…密钥不会泄露。`）与 `:266`（`</div>`）之间；按名字认账（`id="aiProxyNoteWrap"` 那个 callout），别按裸行号。
+
+**这条文案到底出不出现，`RESULT3` 量不出来**（它只看页面非空 + 无异常），所以补了一次性探针 `F:/tmp/task4fix/proxy_note_probe.py`（复用 `shell_check.py` 的 `serve()`/桩/离线 route，不动仓库 harness），走**真实 change 事件**而不是直接改 style：
+
+```
+默认状态: {'hasWrap': True, 'mode': 'direct', 'hasText': True, 'wrapDisplay': 'none', 'spanVisible': False, 'spanClass': 'text-xs muted-2', 'spanColor': 'rgb(110, 137, 163)', 'spanSize': '12px'}
+切 proxy 后: {'hasWrap': True, 'mode': 'proxy', 'hasText': True, 'wrapDisplay': '', 'spanVisible': True, ...}
+切回 direct 后: {'hasWrap': True, 'mode': 'direct', 'hasText': True, 'wrapDisplay': 'none', 'spanVisible': False, ...}
+JS错误: []   PROBE RESULT: PASS   exit 0
+```
+
+两点值得记：(1) 新 `<span>` 是 `#aiProxyNoteWrap` 的**子节点**，所以它的显隐由 `toggleAiModeHint()`（`settings.js:377-384`，读 `input[name="aiMode"]:checked`）整块接管 —— 直连模式下必然看不到，这是设计而不是漏；(2) `text-xs muted-2` 不是新造类，computed 出来 `rgb(110, 137, 163)` / `12px`，`muted-2` 在 `settings.js` 里已有 4 处用法、`styles.css` 里定义 1 处。
+
+- [x] **Step 3: 密钥边界写清楚（这是安全结论，不是可选说明）**
 
 直连模式下 API Key 存在浏览器 localStorage（`ai-gateway.js:10` 的 `workbench-ai-settings-v2`），意味着：
 - 公开部署的站点上，用户填的是**自己的** Key，浏览器直接拿它请求 provider —— 单机自用可接受；
@@ -1363,14 +1380,32 @@ cd "/f/Qoder/自媒体/自媒体工作台/workbench" && grep -rniE "sk-[a-z0-9]{
 ```
 实测（2026-09-30）：`0`。非 0 就停下报告，不要把匹配行贴进任何文档或 commit 信息。
 
-- [ ] **Step 4: 桌面包收口（实测到的缺陷就在这）**
+复跑（2026-10-01，Task 5）：同一条命令（带 `| wc -l`，只打印数量）= **0**。这条扫描的存在理由就是它的输出形态 —— `grep` 不加 `-o`/不带管道会把命中的整串 Key 打上屏幕，于是「查密钥」这个动作本身变成一次泄漏；所以命令模板里那个 `| wc -l` 是判据的一部分，不是排版。**新增文案与这条扫描的关系**：Step 2 那句只写「切直连并填你自己的 Key」，不含任何 Key 值，所以命中数仍是 0；核对 `cd17774` 用的是 `git show --stat` 加同一条带 `| wc -l` 的扫描，而不是把 diff 贴进文档或 commit 信息。
+
+- [x] **Step 4: 桌面包收口（实测到的缺陷就在这）**
 
 Run: `cd "/f/Qoder/自媒体/自媒体工作台/workbench" && npm run tauri:sync && printf "dist_scripts=%s\ndist_jsfiles=%s\nmissing=%s\n" "$(grep -c '<script src' dist/index.html)" "$(ls dist/assets/js | wc -l)" "$(comm -23 <(ls assets/js | sort) <(ls dist/assets/js | sort) | tr '\n' ' ')"`
 实测同步前（2026-09-30）：`src_scripts=25`、`dist_scripts=22`、`src_jsfiles=22`、`dist_jsfiles=19`、`dist_missing=agent.js chat.js platforms.js`（反向差为空，即 dist 里没有已删除的死文件）。
 Expected（同步后）：`dist_scripts=25`、`dist_jsfiles=22`、`missing=`（空）。`tauri:sync` 就是 `node sync-dist.js`，`tauri:build` 会先跑它，所以只有**手动** `tauri build` 会打出没有助手页的桌面包——这一步是把那条陷阱关掉。
 注意 `dist/` 被 `.gitignore:15` 忽略（实测 `git check-ignore -v dist/index.html` 命中该规则），所以 **不要 `git add dist`**，桌面包的正确性靠构建前必跑 `tauri:sync` 保证。
 
-- [ ] **Step 5: Commit**
+**实测（2026-10-01，Task 5 执行）**：同一条 `printf` 口径，同步前逐字复现 2026-09-30 那个缺陷 ——
+
+```
+PRE  src_scripts=25 dist_scripts=22 src_jsfiles=22 dist_jsfiles=19 missing=[agent.js chat.js platforms.js ]
+PRE  reverse_missing=[]
+```
+
+`npm run tauri:sync`（= `node sync-dist.js`，输出 `[ok] 文件: index.html` / `[ok] 目录: assets/` / `✓ 前端资源已同步到 dist/ (dist)`，exit 0）之后：
+
+```
+POST src_scripts=25 dist_scripts=25 src_jsfiles=22 dist_jsfiles=22 missing=[]
+```
+
+三条 Expected 全中。`git check-ignore -v dist/index.html` 仍命中 `.gitignore:15:dist/`，`git status --short` 里没有 `dist/` 任何一行 —— **本步没有产物要提交**，桌面版的正确性是「构建前必跑 sync」这条纪律，不是一个 commit。
+另外三条 `cmp`/计数（因为「dist 里有 22 个 js」并不等于「dist 里的是当前版本」）：`cmp -s index.html dist/index.html` 相同、`cmp -s assets/css/styles.css dist/assets/css/styles.css` 相同（Task 2/3/4 的壳改动确实进了桌面包）、`grep -c "助手页在代理模式下不可用" dist/assets/js/settings.js` = 1（Step 2 那句也进去了）。
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add assets/js/settings.js
@@ -1379,6 +1414,9 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 
 
 （若仓库不跟踪 `dist/`，去掉 `dist`，改为确认 `.gitignore` 覆盖它并在 commit 信息里说明。）
+
+**实测（2026-10-01）**：commit `cd17774 docs(settings)`，`1 file changed, 1 insertion(+)`，只有 `assets/js/settings.js`（无 `dist`，按上面那条括号的分支处理 —— 实测 `git check-ignore -v dist/index.html` 命中 `.gitignore:15`，commit 说明里已写明这条纪律与 `cors_check.py` 的出处边界）。提交后 `git status --short` 为空。
+两件顺带记下的事：(1) `git` 在 add 时警告 `in the working copy of 'assets/js/settings.js', LF will be replaced by CRLF the next time Git touches it` —— 该文件在盘上是 100% LF（628 行、0 CRLF，改前改后都一样），这是仓库既有的 `core.autocrlf` 行为、不是本次引入；不要为此改 git 配置（房规）。(2) Task 5 全程**只新增了一句面向用户的文案**：`agent.js`/`ai-gateway.js`/`chat.js` 未动，没有新后端，`api/ai/*` 的透传缺口按附录 B 保持不动。
 
 ---
 
