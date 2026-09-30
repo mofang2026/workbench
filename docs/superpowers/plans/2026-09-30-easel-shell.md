@@ -4,7 +4,7 @@
 
 **Goal:** 把工作台从「吸顶横向导航 + 整页滚动」改成 Easel 式「常驻左栏 + 右侧工作区」，并让 Agent（助手页）在线上版与桌面版同时可用，不新增后端。
 
-**Architecture:** 纯 CSS/HTML 改动 —— 已实测确认没有任何 JS 读**视口或自身之外**的几何：`grep -rE "innerWidth|clientWidth|getBoundingClientRect|ResizeObserver|addEventListener\(.resize." assets/js/` 命中 **0**（2026-09-30 复跑），所以换壳不需要重排 JS。**必须同时登记的例外**：`scrollTop`/`scrollHeight` 各有 5 处命中（`chat.js:370/423/433/493` 与 `ai-gateway.js:350`），全部是 `el.scrollTop = el.scrollHeight` 这种「写自己那个滚动容器」的自动滚到底，不做视口判断。它们的成立前提是那个容器仍然有界且可滚——换壳后 `.chat-wrap` 的高度改由 `--ws-pad-t/--ws-pad-b` 决定，所以 RESULT7（chat 工作区填满可用高度）就是替这 5 处把守的门禁，不是可以省的断言。侧栏用 `position:sticky + height:100vh`，工作区用 `container-type: inline-size`，让现存 15 条响应式断点继续按「自己那一栏的内容宽度」生效（阈值需平移 −64，推导见 Task 3 Step 1）。
+**Architecture:** 纯 CSS/HTML 改动 —— 已实测确认没有任何 JS 读**视口或自身之外**的几何：`grep -rE "innerWidth|clientWidth|getBoundingClientRect|ResizeObserver|addEventListener\(.resize." assets/js/` 命中 **0**（2026-09-30 复跑），所以换壳不需要重排 JS。**必须同时登记的例外**：`scrollTop`/`scrollHeight` 各有 5 处命中（`chat.js:370/423/433/493` 与 `ai-gateway.js:350`），全部是 `el.scrollTop = el.scrollHeight` 这种「写自己那个滚动容器」的自动滚到底，不做视口判断。它们的成立前提是那个容器仍然有界且可滚——换壳后 `.chat-wrap` 的高度改由 `--ws-pad-t/--ws-pad-b` 决定，所以 RESULT7（chat 高度 = 工作区可用高度，Task 3 起是算术恒等式 + 不出视口）就是替这 5 处把守的门禁，不是可以省的断言。侧栏用 `position:sticky + height:100vh`，工作区用 `container-type: inline-size`，让现存 15 条响应式断点继续按「自己那一栏的内容宽度」生效（阈值需平移 −64，推导见 Task 3 Step 1）。
 
 **Tech Stack:** 原生 JS（`WB.define` 手写 DI，无框架无打包器）+ 单文件 `assets/css/styles.css`（深色主题 token 在 6-55 行）+ Tauri(WebView2) + Vercel/nginx 两种部署。
 
@@ -110,6 +110,7 @@ git status --short                 # 应只剩 ?? docs/
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 Expected: 末行 `RESULT: FAIL(4/9)`，且红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8` —— 与 Task 1 Step 2 的基线**逐字一致**。这一步的意义是：换壳前的工作树 = 已提交内容，`git status --short` 应为空（`?? docs/` 除外，计划文档可最后一起提）。
+> 「逐字一致」约束的是**断言编号、红项集合、末行汇总与退出码**，不含每条后面的实测证据串：Task 3 把 RESULT7 的判定从固定带改成算术恒等式，其证据串随之变成现量值（`chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901`）。所以拿今天的输出比对当年记录时，只有红项集合对不上才算漂移，RESULT7 那行的细节不同属预期。（本步是有序闸门，只在 Task 0/2 当时的状态下成立，不要在 Task 3 之后回跑并期望同样的红项。）
 
 **只 commit，绝不 push。** push 需要用户单独批准（本环境 GCM 无界面，HTTPS push 本就必然失败，见全局约束）。
 
@@ -354,12 +355,24 @@ def main():
             # 容差取 ±1px 并说清理由：chatTop 与 chatBottom 是两次独立的浮点读数（非整数 DPR 或
             # 页面缩放下各带小数），相减最坏漂 1px；实测两档 vh=900 下等式两边都是整数 820，误差 0。
             # 变异 chat_vh_old（把高度换回 calc(100vh - 168px)）实测 760 vs 820 → 红，旧带反而放行过。
+            # 但恒等式对「chat 自己往下挪」是瞎的：若 chat 页里往上插了 100px，则 top=128、bottom=920，
+            # 等式两边一起涨到 920 仍成立，而 .chat-wrap 已经掉出视口（输入框要滚动才够得着）。
+            # 补一条绝对上限把竖位置也管住：bottom <= vh + 1。取 vh 而不是 vh-padB 是因为今天实测
+            # bottom=820 = vh(900) - padB(80)，chat 底边正好压在 padB 那条线上，写成 vh-padB+1
+            # 等于要求 chatTop 与 padT 逐像素对齐，页内任何一处 1px 边距就判红，逼着人再引入
+            # 「允许页内偏移」这种硬常量 —— 正是本任务要拆掉的东西。前提说清：这条靠 height 随 vh
+            # 一起缩才成立。两个不同的下限别混，且都已实测（把 browse(DESK_W, 900) 的高度改成参数跑）：
+            # vh < 628（= 520 + padT 28 + padB 80）时 min-height: 520px 起跳，恒等式自己先红
+            # （vh=600 实测 bottom=548 vs 期望 520）；vh < 548（= padT 28 + 520）时这条上限也红
+            # （vh=540 实测 bottom=548 > 541；vh=560 上限仍放行 548 <= 561，只有恒等式红）。
+            # harness 把 vh 钉在 900，两条都够不着；改 harness 视口的人要连 min-height 一起看。
             g = c["chatWrap"]
             want = g["top"] + (c["vh"] - g["padT"] - g["padB"]) if g else None
             check("7 chat 高度 = 工作区可用高度（算术恒等式）", bool(g)
-                  and abs(g["bottom"] - want) <= 1,
+                  and abs(g["bottom"] - want) <= 1 and g["bottom"] <= c["vh"] + 1,
                   (f"chatBottom={g['bottom']:.0f} 期望 chatTop={g['top']:.0f} + "
                    f"(vh={c['vh']} - padT={g['padT']:.0f} - padB={g['padB']:.0f}) = {want:.0f} ±1"
+                   f"，且 <= vh+1={c['vh'] + 1}"
                    if g else "chatBottom=量不到 .chat-wrap 或 .workspace"))
 
             m = pg.evaluate(MODAL)
@@ -657,7 +670,7 @@ narrow_no_degrade: SKIP —— 锚点不在 styles.css 中（前置任务没做�
 | 4 | 12 页无横向溢出 | `ws_min_width` | Task 2 后 |
 | 5 | 侧栏内 12 个导航项 | `sidebar_class_gone` | Task 2 后 |
 | 6 | 单高亮且随页切换 | `nav_dup` | **改壳前即可（已证）** |
-| 7 | chat 填满可用高度 | `chat_vh_old` | Task 3 后 |
+| 7 | chat 高度 = 工作区可用高度（算术恒等式）且不出视口 | `chat_vh_old`（恒等式那半）；**上限那半没有变异表条目**，由控制器的 100px 注入证明，配方见 Task 3 Step 4 收口段 | Task 3 后 |
 | 8 | 模态覆盖视口 + 编辑器是单列 **grid**（`display == "grid"` 且 `tracks == 1`） | `modal_container` | Task 3 后 |
 | 9 | 窄屏降级无溢出 | `narrow_no_degrade` | Task 4 后（此前 RESULT9 是红的，会报 INVALID） |
 
@@ -687,7 +700,7 @@ harness 在仓库外，无需 commit；第一个参数可覆盖桌面巡检宽�
 - [x] **Step 1: 确认基线（与 Task 1 Step 2 逐字一致才算）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
-Expected: 红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8`，末行 `RESULT: FAIL(4/9)`。多出或少掉任何一条，都说明工作树被别的改动动过——先回查（`git status --short`、Task 0 是否已落库），不要开始改 markup。
+Expected: 红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8`，末行 `RESULT: FAIL(4/9)`。多出或少掉任何一条，都说明工作树被别的改动动过——先回查（`git status --short`、Task 0 是否已落库），不要开始改 markup。（「逐字一致」的口径见 Task 0 Step 3 的注：只认断言编号、红项集合、末行汇总与退出码，不认每条后面的实测证据串。）
 **实测（Task 2 执行前，2026-09-30，HEAD `136ecc8`）**：逐字复现 —— `RESULT: FAIL(4/9)`，红项 `RESULT1/RESULT2/RESULT5/RESULT8`，`RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0`。开工前两文件 100% CRLF（`index.html` 12280B/259 行、`styles.css` 61933B/2185 行，bare-LF 均为 0）。
 
 - [x] **Step 2: 改 markup**
@@ -994,7 +1007,10 @@ Expected: `576×4`、`836×3`、`916×2`、`496×2`、`656×1`、`704×1`、`800
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py 1024`
 Expected: 两档都只剩 `RESULT9` 红（Task 4 的窄屏降级还没写），末行 `RESULT: FAIL(1/9)`。`RESULT8` 转 PASS 就是 `display: 'grid'` 且 `tracks: 1`，即那条 640px 模态挤两列的既有 bug 被容器查询顺手修掉了；`RESULT7` 的 `chatBottom` 应回到 **825**——这是算术推的：`height: calc(100vh - 28 - 80)` 在 vh=900 得 792，`.workspace` 顶部内边距 28 + 页面自身那 5px 得顶边 33，`33 + 792 = 825`，与改壳前实测的 825 相同。跑出来不是 825 就以实数为准并记在这里，别硬凑。
 
-**实测（Task 3，两档都是 `FAIL(1/9)`、只剩 `RESULT9` 红、`RESULT-OFFLINE: PASS`、exit 1）**：`RESULT8` 按预期转 PASS —— 1440 档 `{'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'display': 'grid', 'tracks': 1, 'vw': 1440, 'vh': 900}`，1024 档同形只是 `maskW/vw` 变 1024；`.modal` 内容盒实测 592（`640 - 2×24`）≤ 916，所以 `.editor-layout` 那条单列规则在模态里第一次真的生效了，`tracks` 从 2 变 1。
+**实测（Task 3，两档都是 `FAIL(1/9)`、只剩 `RESULT9` 红、`RESULT-OFFLINE: PASS`、exit 1）**：`RESULT8` 按预期转 PASS —— 1440 档 `{'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'display': 'grid', 'tracks': 1, 'vw': 1440, 'vh': 900}`，1024 档同形只是 `maskW/vw` 变 1024；`.modal` 内容盒实测 **590** ≤ 916，所以 `.editor-layout` 那条单列规则在模态里第一次真的生效了，`tracks` 从 2 变 1。
+
+> **更正（Task 3 收口时量的）**：implementer 报告与本文原先都写 `592（640 - 2×24）`，那是算术不是实测 —— 漏了 `.modal` 的 `border: 1px`，而 `* { box-sizing: border-box }`（`styles.css:63`）让 640 含边框与内补，真值 `640 - 2×1 - 2×24 = 590`。直接量法：在 `.modal` 里插一个 `width:100cqw` 的探针，`getBoundingClientRect().width` = **590**（同一探针另报 `offsetWidth 640 / clientWidth 638 / boxSizing border-box`）。差 2px 不改变任何结论（590 与 592 都 ≤ 916、都 > 576），但 `styles.css` 里那条注释、Task 6 的清单和 `task-3-report.md` 都已按 590 更正。
+
 `chatBottom` **实测量 = 820，不是算术推的 825**：差的正是那句「页面自身那 5px」—— `grep -c "page" assets/css/styles.css` = **0**，`.page` 这些 `<section>` 在本仓库没有任何 CSS 规则（显隐只靠 `.hidden { display: none !important; }`），所以 `.chat-wrap` 的顶边就等于 `.workspace` 的 `padding-top` = 28，`28 + 792 = 820`。以实数为准记在这里。
 
 **额外一步（controller ruling，本任务授权改 harness 的唯一一处）：`RESULT7` 的判定由「带」改成「算术恒等式」。**
@@ -1004,8 +1020,12 @@ Expected: 两档都只剩 `RESULT9` 红（Task 4 的窄屏降级还没写），�
 chatBottom == chatTop + (vh - padT - padB)
 ```
 
-`chatTop`/`chatBottom` 取 `.chat-wrap` 的 `getBoundingClientRect()`（浮点原值，不预先取整），`padT`/`padB` 取 `.workspace` 的 `getComputedStyle` 内补，`vh` 取 `innerHeight` —— 四项全部现量，于是页面那点顶部偏移自己进了等式，不再是需要硬凑的 `+5`。容差 **±1px**（理由写在 harness 注释里）：`chatTop` 与 `chatBottom` 是两次独立的浮点读数，非整数 DPR 或页面缩放下各带小数，相减最坏漂 1px；实测两档 vh=900 下等式两边都是整数 820、误差 0。9 条编号断言与 `FAIL(n/9)` 分母没动，判定行照旧把操作数打全：`RESULT7: PASS  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1`。
-改完 `python -m py_compile shell_check.py` 通过，且 `shell_check.py`（12549B / 257 行 / 100% CRLF）与本文档 :133 那个围栏块 **raw 逐字节相同**（两文件都是 CRLF，所以不需要先做 LF 归一）。`chat_vh_old` 在新判定下实测打红（见 Step 6 的证据行）：`chatBottom=760 期望 ... = 820 ±1`。
+`chatTop`/`chatBottom` 取 `.chat-wrap` 的 `getBoundingClientRect()`（浮点原值，不预先取整），`padT`/`padB` 取 `.workspace` 的 `getComputedStyle` 内补，`vh` 取 `innerHeight` —— 四项全部现量，于是页面那点顶部偏移自己进了等式，不再是需要硬凑的 `+5`。容差 **±1px**（理由写在 harness 注释里）：`chatTop` 与 `chatBottom` 是两次独立的浮点读数，非整数 DPR 或页面缩放下各带小数，相减最坏漂 1px；实测两档 vh=900 下等式两边都是整数 820、误差 0。9 条编号断言与 `FAIL(n/9)` 分母没动，判定行照旧把操作数打全：`RESULT7: PASS  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901`。
+改完 `python -m py_compile shell_check.py` 通过，且 `shell_check.py`（13979B / 269 行 / 100% CRLF）与本文档 :133 那个围栏块 **raw 逐字节相同**（两文件都是 CRLF，所以不需要先做 LF 归一）。`chat_vh_old` 在新判定下实测打红（见 Step 6 的证据行）：`chatBottom=760 期望 ... = 820 ±1`。
+
+**Task 3 收口补的一条：恒等式对「chat 自己往下挪」是瞎的，必须再加一条绝对上限。** 评审给出的反例成立：若 chat 页里往上插了 100px，`.chat-wrap` 高度不变而 `top=128`、`bottom=920`，等式两边一起涨到 920 仍然成立 → 绿，而输入框已经掉出视口。旧带 `chatBottom <= vh+1` 那半边本来就是绝对上限，被我换成恒等式时一起丢了。补回来的写法是 `and g["bottom"] <= c["vh"] + 1`（不是评审建议的 `vh - padB + 1`：今天实测 `bottom=820 = vh(900) - padB(80)`，chat 底边正好压在 padB 线上，写成 `vh-padB+1=821` 等于要求 `chatTop` 与 `padT` 逐像素对齐，页内任何 1px 边距就判红，逼着人再引入「允许页内偏移」这种硬常量）。判定行同时把这条上限打出来（上面那句 `，且 <= vh+1=901`）。
+这条不是空转，两个方向都实测过：(1) 临时往 `styles.css` 末尾追加 `#page-chat { padding-top: 100px; }` 再跑，`RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901` —— 恒等式**成立**（920=920，误差 0）而判定红，正是反例那一半；跑完按字节还原，`git hash-object assets/css/styles.css` 前后同为 `3daadfe9494b14f154a3e1df329d475862721d14`、`git status --short` 空。(2) `chat_vh_old` 仍 `OK 变红`（`chatBottom=760 期望 … = 820`），恒等式那半没被新子句吃掉。
+两个前提下限也实测过（把 `browse(DESK_W, 900)` 的高度改成参数跑，不动仓库里的 harness）：`vh < 628`（= 520 + padT 28 + padB 80）时 `min-height: 520px` 起跳，恒等式自己先红（vh=600 实测 `bottom=548` vs 期望 520）；`vh < 548`（= padT 28 + 520）时新上限也红（vh=540 实测 `bottom=548 > 541`；vh=560 上限仍放行 `548 <= 561`，只有恒等式红）。harness 把 vh 钉在 900，两条都够不着，但改视口的人要连 `min-height` 一起看。
 
 
 - [x] **Step 5: 量最窄桌面宽度下的溢出（这是改壳的真实代价，必须量不是猜）**
@@ -1243,10 +1263,15 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 
 - [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（9 条编号断言；离线行红时末行是 `RESULT: FAIL(0/9)`，以 exit 码为准）
 - [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`；`sidebar_w_zero`/`grid_one_col`/`sidebar_class_gone`/`nav_dup` 四条各带预期的 `COLLATERAL` —— 四对的具体名单与成因见 Task 4 Step 3 的「Task 2 实测补记」，那四对一起出现才是对的），末行 `全部断言已被证明会变红`，exit 0
+  **变异表之外还要补跑一次 RESULT7 的上限那半**（表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
 - [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
 - [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
   **这两个脚本没有 `WB_REPO` 会直接抛「需要 WB_REPO 环境变量」**（`check_registry.mjs:13`，实测），不带它就跑是假通过的前置形态：你会看到 Node 堆栈而不是 PASS。
 - [ ] **Step 5:** 桌面：`npm run tauri:dev`，窗口拉到 `minWidth` 1024，逐页翻一遍
+  这一步是全计划唯一的人眼验收（Task 2 Step 6b、Task 3 Step 7b 都把账记在这里），自动化量的是几何与异常，量不出「像不像 Easel」。要看的清单：
+  - 左栏 12 项的指认难度、`.nav-link.active::before` 那 3px 竖条够不够强（不够就调 Task 2 Step 4 的 `.sidebar .nav-link` 内边距/`gap`，别留成待办）；宽屏上会出现两条滚动线（sticky 侧栏 + 文档滚动），确认它看着是设计而不是坏了。
+  - 1024 档助手页退两栏（容器 696 ≤ 800 → `.chat-tools` 隐藏）是否仍好用。
+  - **模态里的 `.grid-3`**：`metrics.js:534` 渲染 `<div class="grid grid-3">` 在模态内，Task 3 的容器化让它现在塌成 2 列（模态内容盒实测 **590** ≤ 916，走 `.grid-3,.grid-4 → repeat(2,1fr)` 那条；576 那条 `→ 1fr` 不触发）。方向上是想要的（与 `.editor-layout` 同一个既有 bug 家族），但**没有任何断言覆盖它**，只能看。评审已排除其它在模态内渲染的候选（`.metrics-dashboard`/`.cal-stats`/`.calendar-grid`/`.cal-week-grid`/`.card-design-layout`/`.hr-topic-*`/`.platform-compliance-grid` 都是页面级渲染；`.modal-lg` 目前无人引用），所以爆炸半径就是 `.grid-3/.grid-4` + `.editor-layout`。
 - [ ] **Step 6:** 线上：部署后跑一次 `cors_check.py` 对照 + 在手机宽度（390）逐页翻一遍
 
 ---
