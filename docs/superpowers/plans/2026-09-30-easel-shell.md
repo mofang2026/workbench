@@ -1108,7 +1108,7 @@ git commit -m "refactor(shell): 工作区断点改容器查询，chat 高度去�
 - Consumes: Task 2 的 `.app-shell/.sidebar/.nav-link` 结构
 - Produces: 手机上退化成「横滑顶部导航」，等价于改壳前的观感；`shell_check.py` RESULT9 转绿
 
-- [ ] **Step 1: 加查询块**
+- [x] **Step 1: 加查询块**
 
 ```css
 /* ── 窄屏：侧栏降级为顶部横滑导航（等价改壳前） ── */
@@ -1134,12 +1134,16 @@ git commit -m "refactor(shell): 工作区断点改容器查询，chat 高度去�
 1. `@media` 用视口宽度是对的 —— 这里退化的是整个壳（侧栏在不在），不是某一栏的内容宽度，所以不能用容器查询。
 2. 降级段把 `.workspace` 内边距从 `32px` 改成 `16px`，于是窄屏下「容器阈值 ↔ 视口」的换算与桌面不同：桌面是 `内容 = 视口 - 264 - 64`，降级后是 `内容 = 视口 - 32`。同一容器阈值下，降级形态比桌面晚 32px 命中（`T-64` 对应视口 `T-32` 而不是 `T`）。这是既成事实的取舍，不是 bug：手机宽度下没人拿 32px 当尺子，但改数字时要意识到两档的尺子不一样长。
 
-- [ ] **Step 2: 跑 harness（两档）**
+**实测（2026-10-01）**：上面 Files 行的「遗留视口查询位置附近」已过时 —— Task 3 收口后 `styles.css` 里视口查询计数为 **0**，没有遗留位置。按 controller ruling，降级段插在 `.modal` 容器块（原 `:207-210`）之后、`/* ── 卡片 ── */` 之前：被它覆盖的全部 shell 规则（`.sidebar*` 原 `:146-190`、`.workspace` 原 `:191-200`）都在文件更早处，且 `:210` 之后再无对 `.workspace`/`.sidebar`/`.sidebar .nav-link` 的重新声明，同特异度按源序降级段即胜出 —— 不加 `!important`、不放文件末尾。两点「注意」按房规写进了 commit `15ec01a` 的说明，而不是 CSS 注释（`@media` 计数门禁把注释文本也算进去）。写入门禁实测：视口查询计数 = **1**、容器查询分布不变合计 **15**（`576×4、836×3、916×2、496×2、656×1、704×1、800×1、1036×1`）、`narrow_no_degrade` 的锚点行全文件唯一（1 处，单行、逐字）；EOL 审计 `64939B / crlf 2259 / bare_lf 0`（编辑工具保 CRLF，全程未用 sed -i）。
+
+- [x] **Step 2: 跑 harness（两档）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py 1024`
 Expected: 两档都全部 9 条 PASS 且 `RESULT-OFFLINE: PASS`，末行 `RESULT: PASS`，exit 0。这是本计划的收口点，也是 `shell_mutate.py` 里 `no_sticky` 等变异从 INVALID 转成可证明的前提。编号全绿但 `RESULT-OFFLINE` 红时末行是 `RESULT: FAIL(0/9)`（分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母），所以这一步同时看 exit 码与那一行本身。
 
-- [ ] **Step 3: 跑全量变异，把 9 条断言（11 个变异）一次证明干净**
+**实测（2026-10-01）**：1440 与 1024 两档均 9/9 PASS、`RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0`、末行 `RESULT: PASS`、exit 0。`RESULT9` 转绿（两档同）：`display=block overflowX=0 错误=[]`。`RESULT7` 两档逐字等于预期：`chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901` —— 数字没动，降级段没有泄漏到桌面宽度。
+
+- [x] **Step 3: 跑全量变异，把 9 条断言（11 个变异）一次证明干净**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py`
 Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。这一行现在**只有 `shell_check.py` 把话说完才会被打**（stdout 无 RESULT 判定行 / 无末行 `RESULT:` 汇总 / 退出码非 0-1 / 超过 `CHECK_TIMEOUT = 120s` 未退出 → 驱动直接中止并带上 returncode 与 stderr 摘录），改前它是「子进程一个字没输出」也会打印的假绿句子。但这句话能撑到的范围要说准：它证明的是**那次子进程跑到了底**（至少有 1 条 `RESULT<数字>` 判定行、有末行汇总、退出码 0/1、没超时），不是**9 条编号断言与离线行都齐**——条数由 `shell_check.py` 自己那本账管，驱动故意不数（钉两个 9 就成两处账，第一次不同步会表现为整轮中止而不是诚实报告）。所以 Step 3 的「9 条齐全」仍靠人看那份逐行输出核，`全绿` 只是排掉了「压根没量」这条路。
@@ -1147,13 +1151,17 @@ Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_stic
 
 **Task 2 实测补记（照此认账，别在 Task 4/6 重新发现一遍）**：那 8 条变异里还有两对共现——`grid_one_col` 打红 `['RESULT1', 'RESULT2']`、`sidebar_class_gone` 打红 `['RESULT1', 'RESULT5']`。成因与上面两条同类：锚点动的是 `.app-shell` 的列轨与 `.sidebar` 这个类本身，而 RESULT1 量的正是这两件事，所以 RESULT1 跟着红是结构必然，不是串撞错了对象。撞错对象长得不一样：那会是 `BAD 没变红`（目标没红、红的名字点不出因果）或 `INVALID`（目标在变异前就红）。Task 4 Step 3 跑全 11 条时，这四对 COLLATERAL 一起出现才是对的。
 
+**实测（2026-10-01，全 11 条）**：首行 `变异前基线红项：全绿`，11 行全部 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0；0 SKIP、0 INVALID、0 ANCHOR、无还原失败。`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次。四对预告 COLLATERAL 中三对逐字符合：`sidebar_w_zero → ['RESULT1', 'RESULT2']`、`sidebar_class_gone → ['RESULT1', 'RESULT5']`、`nav_dup → ['RESULT5', 'RESULT6']`；`grid_one_col` 实测为 `['RESULT1', 'RESULT2', 'RESULT7']`，比 Task 3 那份记录多出 RESULT7。**已用对照实验证明与本任务降级段无关**：把降级段整段临时移除（字节还原到写前状态，`git hash-object` 前后同为 `07d4ee7f…`），单跑 `grid_one_col`，collateral 仍是 `['RESULT1', 'RESULT2', 'RESULT7']`（基线红项此时为 `['RESULT9']`，故 RESULT9 不进新红名单）。成因是 `a6e0979` 给 RESULT7 补的绝对上限 `bottom <= vh + 1`：单列 grid 把工作区推到 y=900，chatBottom≈1720 必然超上限，而算术恒等式半边仍成立 —— Task 3 的「没有撞到 RESULT7」名单是旧版 RESULT7（无上限）下录的，此后认账以三红为准，这是 harness 演进后的结构必然，不是锚点撞错。另两条本轮才可见的 COLLATERAL：`ws_container_gone → ['RESULT2', 'RESULT9']`、`ws_min_width → ['RESULT4', 'RESULT9']` —— RESULT9 基线转绿后「相对基线新红」才数得进它（Task 4 之前 RESULT9 恒红，永远进不了新红名单），两条的成因都是工作区宽度被破坏后 390 窄屏跟着溢出/容器查询失配，同属结构必然。
 
-- [ ] **Step 4: Commit**
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add assets/css/styles.css
 git commit -m "feat(shell): 窄屏侧栏降级为顶部横滑导航"
 ```
+
+**实测（2026-10-01）**：commit `15ec01a`（仅 `assets/css/styles.css`，1 file changed, 18 insertions），两点「注意」与 grid_one_col 三红的附注均写入 commit 说明；提交后 `git status --short` 为空。
 
 ---
 
