@@ -1069,6 +1069,7 @@ Expected: 10 行全部 `OK 变红`，exit 0。**故意不带 `narrow_no_degrade`
 | `modal_container` | RESULT8 | `{'maskW': 1440, 'display': 'grid', 'tracks': 2, ...}` —— 容器一摘，模态里那条单列规则不再生效，`tracks` 回到 2 | 只有 RESULT8 |
 
 四对 COLLATERAL 与计划预告的名单逐字相同（`sidebar_w_zero`/`grid_one_col` → `['RESULT1','RESULT2']`，`sidebar_class_gone` → `['RESULT1','RESULT5']`，`nav_dup` → `['RESULT5','RESULT6']`），除此之外没有第五对，也没有任何一条撞到 RESULT7/RESULT8。
+> 这是 Task 3 当时的记录，保留原话。**Task 4 之后的口径变了**：`grid_one_col` 现在连带打红 RESULT7（`a6e0979` 给 RESULT7 补的绝对上限 `bottom <= vh+1` 在单列 grid 下必然触发），另有 `ws_container_gone`/`ws_min_width` 连带 RESULT9（RESULT9 基线转绿后才数得进「相对基线新红」）。以 Task 4 Step 3 的实测段与 Task 6 Step 2 的名单为准。
 `chat_vh_old` 这一行同时是 Step 4 那条恒等式的验收：**旧判定带在 vh=900 放行 `[814, 901]`，恒等式只放行 `820 ±1`**，760 两边都红，但带会放行 `calc(100vh - 114px)` 那种同族硬常量而恒等式不会。
 还原复核（按字节）：跑前 `styles.css` `63912B / sha256 1a4ec610f18f9d66…`、`index.html` `12353B / sha256 473aba764cad2f6e…`；跑后两个哈希一字不变，另用 `cmp` 对 `/f/tmp/task3/` 里的快照比过一次相同；`git status --short` 只剩 ` M assets/css/styles.css`。
 
@@ -1150,6 +1151,7 @@ Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_stic
 （`sidebar_w_zero` 会让 RESULT1 与 RESULT2 同时变红：侧栏宽 0 → 工作区 x=0。这不影响判定，目标 RESULT1 红即算证明，但驱动会在它下面打一行 `COLLATERAL 相对基线新红 ['RESULT1', 'RESULT2']，目标只有 RESULT1` —— 那行现在是自动的，不用靠人盯 `实际` 列。`nav_dup` **不在**这一列里，且这是设计好的：Task 2 之后它的锚点在 `.sidebar` 内，复制一份会把 `navInSidebar` 推到 13，所以它这一行的预期输出是 `OK 变红` 下面紧跟 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6`——RESULT5 的共现红是**预期**、不是缺陷（RESULT5 由 `sidebar_class_gone` 负责证明，`nav_dup` 只是第二次压上它的计数半边）。单一断言被单一变异打红这件事，只有 `no_sticky`、`page_id_gone`、`ws_container_gone` 等几条成立。）
 
 **Task 2 实测补记（照此认账，别在 Task 4/6 重新发现一遍）**：那 8 条变异里还有两对共现——`grid_one_col` 打红 `['RESULT1', 'RESULT2']`、`sidebar_class_gone` 打红 `['RESULT1', 'RESULT5']`。成因与上面两条同类：锚点动的是 `.app-shell` 的列轨与 `.sidebar` 这个类本身，而 RESULT1 量的正是这两件事，所以 RESULT1 跟着红是结构必然，不是串撞错了对象。撞错对象长得不一样：那会是 `BAD 没变红`（目标没红、红的名字点不出因果）或 `INVALID`（目标在变异前就红）。Task 4 Step 3 跑全 11 条时，这四对 COLLATERAL 一起出现才是对的。
+> 更正（Task 4 实测之后）：上一句在 Task 4 已不成立 —— 全 11 条跑出来的共现是 **6 条**（`grid_one_col` 变三红、`ws_container_gone`/`ws_min_width` 各多一条 RESULT9），名单与成因见下面 Task 4 的实测段。本段是 Task 2 那次 8 条变异（RESULT9 还恒红）的记录，保留原话。
 
 **实测（2026-10-01，全 11 条）**：首行 `变异前基线红项：全绿`，11 行全部 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0；0 SKIP、0 INVALID、0 ANCHOR、无还原失败。`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次。四对预告 COLLATERAL 中三对逐字符合：`sidebar_w_zero → ['RESULT1', 'RESULT2']`、`sidebar_class_gone → ['RESULT1', 'RESULT5']`、`nav_dup → ['RESULT5', 'RESULT6']`；`grid_one_col` 实测为 `['RESULT1', 'RESULT2', 'RESULT7']`，比 Task 3 那份记录多出 RESULT7。**已用对照实验证明与本任务降级段无关**：把降级段整段临时移除（字节还原到写前状态，`git hash-object` 前后同为 `07d4ee7f…`），单跑 `grid_one_col`，collateral 仍是 `['RESULT1', 'RESULT2', 'RESULT7']`（基线红项此时为 `['RESULT9']`，故 RESULT9 不进新红名单）。成因是 `a6e0979` 给 RESULT7 补的绝对上限 `bottom <= vh + 1`：单列 grid 把工作区推到 y=900，chatBottom≈1720 必然超上限，而算术恒等式半边仍成立 —— Task 3 的「没有撞到 RESULT7」名单是旧版 RESULT7（无上限）下录的，此后认账以三红为准，这是 harness 演进后的结构必然，不是锚点撞错。另两条本轮才可见的 COLLATERAL：`ws_container_gone → ['RESULT2', 'RESULT9']`、`ws_min_width → ['RESULT4', 'RESULT9']` —— RESULT9 基线转绿后「相对基线新红」才数得进它（Task 4 之前 RESULT9 恒红，永远进不了新红名单），两条的成因都是工作区宽度被破坏后 390 窄屏跟着溢出/容器查询失配，同属结构必然。
 
@@ -1270,7 +1272,17 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 ## Task 6: 端到端总验收
 
 - [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（9 条编号断言；离线行红时末行是 `RESULT: FAIL(0/9)`，以 exit 码为准）
-- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`；`sidebar_w_zero`/`grid_one_col`/`sidebar_class_gone`/`nav_dup` 四条各带预期的 `COLLATERAL` —— 四对的具体名单与成因见 Task 4 Step 3 的「Task 2 实测补记」，那四对一起出现才是对的），末行 `全部断言已被证明会变红`，exit 0
+- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0
+  **`COLLATERAL` 白名单（Task 4 全 11 条实测，控制器 2026-10-01 复跑逐字相同）—— 6 条共现全是预期的，少一条或多一条都要停下来查**：
+  | 变异 | 目标 | 实测新红集合 | 成因 |
+  |---|---|---|---|
+  | `sidebar_w_zero` | RESULT1 | `['RESULT1','RESULT2']` | 侧栏宽 0 → 工作区 x=0，RESULT2 量的正是 x=264 |
+  | `grid_one_col` | RESULT2 | `['RESULT1','RESULT2','RESULT7']` | 单列 grid 把工作区推到 y=900 → RESULT1 的吸顶/几何红；chatBottom≈1720 超 RESULT7 的 `bottom <= vh+1` 上限（恒等式那半仍成立，是上限那半在咬） |
+  | `ws_container_gone` | RESULT2 | `['RESULT2','RESULT9']` | 摘掉 `container-name` → 390 窄屏那档的容器查询失配，RESULT9 跟着红（RESULT9 基线转绿后才数得进「相对基线新红」） |
+  | `ws_min_width` | RESULT4 | `['RESULT4','RESULT9']` | `min-width: 0` 换成 1200px → 12 页各 `+24px`，390 档同样溢出 |
+  | `sidebar_class_gone` | RESULT5 | `['RESULT1','RESULT5']` | 去掉 `.sidebar` 类本身，而 RESULT1 量的就是它 |
+  | `nav_dup` | RESULT6 | `['RESULT5','RESULT6']` | 复制出的那份导航在 `.sidebar` 内 → `navInSidebar` 12→13 |
+  其余 5 条（`no_sticky`/`page_id_gone`/`chat_vh_old`/`modal_container`/`narrow_no_degrade`）**不带** `COLLATERAL`，只红目标那一条。撞错对象长得完全不同：`BAD 没变红`（目标没红）或 `INVALID`（目标在变异前就红）。
   **变异表之外还要补跑一次 RESULT7 的上限那半**（表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
 - [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
 - [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
