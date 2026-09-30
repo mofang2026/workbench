@@ -66,7 +66,7 @@
 
 **行号口径**：本计划里所有 `index.html` / `styles.css` 行号都取自**当前工作树**（含未提交的 204 行 chat 样式块与 `data-page="chat"` 导航项），Task 0 落库之前它们不对应 `HEAD`。`.chat-wrap`（`styles.css:1986-1991`）尤其如此——它只存在于工作树，`git checkout HEAD -- assets/css/styles.css` 会让 Task 3 Step 3 失去目标。
 
-- [ ] **Step 1: 确认未提交面（本计划撰写时实测，数字会变，以当场输出为准）**
+- [x] **Step 1: 确认未提交面（本计划撰写时实测，数字会变，以当场输出为准）**
 
 Run:
 ```bash
@@ -75,7 +75,7 @@ cd "/f/Qoder/自媒体/自媒体工作台/workbench" && git status --short | gre
 实测（2026-09-30）：20 个已修改文件 + 5 个未跟踪（`assets/js/agent.js`、`assets/js/chat.js`、`assets/js/platforms.js`、`docs/`、`supabase/migration_bridge_links.sql`），合计 `+481 -147`；其中 `assets/js/ai-gateway.js` 为 `+129 -0`（Agent 的 `sendMessages/streamMessages/requireDirect/agentBody`）。
 Expected: 与上面同量级。**若出现本会话未涉及的第三个改动源，先停下问用户，不要一起 commit。**
 
-- [ ] **Step 2: 拆成三个可独立回滚的 commit**
+- [x] **Step 2: 拆成三个可独立回滚的 commit**
 
 `index.html` 与 `assets/css/styles.css` **都横跨两类改动**，必须用 `git add -p` 拆；其余按文件分组即可。实测 `styles.css` 只有两个 hunk：
 - `@@ -1346,4 +1346,8 @@`：新增 `.alert-shipinhao/.alert-kuaishou/.alert-weibo/.alert-toutiao` 四行 → 属于注册表那一版；
@@ -106,11 +106,23 @@ git status --short                 # 应只剩 ?? docs/
 
 若某个 hunk 归属判断不了（同一处上下文里既改了导航又改了平台标签），停下来问用户，不要凭猜分配——commit 拆错的代价是回滚时连带废掉另一半工作。
 
-- [ ] **Step 3: 提交后回归（证明 commit 没漏文件）**
+**实测（2026-10-01 回填）**：`git add -p` 在本 CLI 被禁（交互式），改用非交互的 hunk 级暂存（`git diff -U3` 挑 hunk → `git apply --cached`），账本 Setup 段有这条 Ruling。第一轮拆出的 `f53e3c3`/`cb99db4`/`8766c7d` 被 Task 0 评审判为「commit (a) 不干净」（两个方向 revert 都会跨版本串味），fix round 1 重拆到 sub-hunk 粒度后落在 HEAD 的是：
+
+```
+38c8f23 refactor(platforms): 平台名收敛为单一注册表，修复数据复盘 CSV 只认 4 个平台
+6c29716 chore(supabase): 折叠缺失 DDL 并收紧 bridge_links 归属校验
+bdcd6b1 feat(agent): 助手页双栏工作区 + 只读工具循环
+```
+
+2026-10-01 复核：三条都 `git merge-base --is-ancestor … HEAD` 为真，旧的三条都不在 HEAD 上（已被重拆取代、没泄漏到分支）。`git show --numstat` 现量：(a) `styles.css 4 0` / `app.js 5 17` / `index.html 1 0`（只多 `+platforms.js` 一行），(c) `styles.css 204 0` / `app.js 1 0`（`"chat": "Chat"`）/ `index.html 5 1`。与账本里「修正后的目标归属」逐字对得上；(b) 不含这三个文件。
+
+- [x] **Step 3: 提交后回归（证明 commit 没漏文件）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 Expected: 末行 `RESULT: FAIL(4/9)`，且红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8` —— 与 Task 1 Step 2 的基线**逐字一致**。这一步的意义是：换壳前的工作树 = 已提交内容，`git status --short` 应为空（`?? docs/` 除外，计划文档可最后一起提）。
 > 「逐字一致」约束的是**断言编号、红项集合、末行汇总与退出码**，不含每条后面的实测证据串：Task 3 把 RESULT7 的判定从固定带改成算术恒等式，其证据串随之变成现量值（`chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901`）。所以拿今天的输出比对当年记录时，只有红项集合对不上才算漂移，RESULT7 那行的细节不同属预期。（本步是有序闸门，只在 Task 0/2 当时的状态下成立，不要在 Task 3 之后回跑并期望同样的红项。）
+
+**实测（2026-10-01 回填）**：这一步跑了两次 —— 第一轮三个 commit 之后、fix round 1 重拆之后，两次的 `shell_check.py` 末行都是 `RESULT: FAIL(4/9)`、红集合都是 {1,2,5,8}、绿的是 {3,4,6,7,9}（`task-0-report.md` §8 与重拆段各留了一份），即「commit 没漏内容」：换壳前的工作树与已提交树在 harness 眼里同一。当时是 9 条断言，`RESULT10` 是 Task 4 fix round 1 才加的，所以这里的 `4/9` 与 Task 6 的 `0/10` 不是同一分母，别拿今天的输出去对这一行。
 
 **只 commit，绝不 push。** push 需要用户单独批准（本环境 GCM 无界面，HTTPS push 本就必然失败，见全局约束）。
 
@@ -1422,8 +1434,20 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 
 ## Task 6: 端到端总验收
 
-- [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（10 条编号断言；离线行红时末行是 `RESULT: FAIL(0/10)`——分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母 —— 所以这一档要同时看 exit 码和那行本身，以 exit 码为准）
-- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **13** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止），13 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0。
+- [x] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（10 条编号断言；离线行红时末行是 `RESULT: FAIL(0/10)`——分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母 —— 所以这一档要同时看 exit 码和那行本身，以 exit 码为准）
+
+  **实测（2026-10-01，Task 6 复跑）**：两档都是 `RESULT1…RESULT10` 十行 PASS + `RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0` + 末行 `RESULT: PASS` + `exit=0`。两档逐字相同的四条关键行（其余六条只有几何数字随宽度变）：
+
+  ```
+  RESULT3: PASS  3 12 页均有内容且无未捕获异常  空页=[] JS错误=[]
+  RESULT7: PASS  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=820 期望 chatTop=28 + (vh=900 - padT=28 - padB=80) = 820 ±1，且 <= vh+1=901
+  RESULT10: PASS  10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）  sidebarH=111 chatH=589 chatBottom=720 + padB=60 <= vh+1=781 scrollH=780 overflowY=0
+  RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0
+  ```
+
+  随宽度变的只有 `RESULT1/2/8` 的盒尺寸：1440 档工作区 `{'x': 264, 'w': 1176}`、模态 `maskW: 1440`；1024 档 `{'x': 264, 'w': 760}`、`maskW: 1024`。`RESULT7` 在两档完全相同，因为量的是视口高（900）而不是视口宽 —— 这正是 Task 3 去掉 `168px` 常量后该有的表现。
+
+- [x] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **13** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止），13 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0。
   **RESULT10 有两条变异**，因为它的判据是两半（`chat_rail_tall` 只红前半、`nav_h_gone` 两半同红）。一条断言由两条变异各自证到并非新例 —— `RESULT1`（`sidebar_w_zero`/`no_sticky`）与 `RESULT2`（`grid_one_col`/`ws_container_gone`）本来就是这样，含义都是「这条性质可以从不同部位被破坏」。
   离线门在这个驱动里只在红的时候说话：`shell_mutate.py` 的 `run()`（现约 `:127-129`，`if re.search(r"^RESULT-OFFLINE: FAIL", out, re.M)` 那一支）是「看到 OFFLINE 红就 `SystemExit` 并打出整段 stdout」，绿路径不打印那一行，所以本步的正确期望是「输出里没有 OFFLINE 行且首行是 `全绿`」，不是「有一行 `RESULT-OFFLINE: PASS`」——去找一行永远不会出现的文本，要么误判成 harness 坏了，要么把「没看到」当通过。Task 1 写这条时按 harness 的口径抄了过来，抄错了对象，2026-10-01 读码更正。
   **`COLLATERAL` 白名单（Task 4 fix round 1 后全 13 条实测，控制器 2026-10-01 复跑逐字相同）—— 7 条共现全是预期的，少一条或多一条都要停下来查**：
@@ -1438,9 +1462,31 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   | `chat_vh_old` | RESULT7 | `['RESULT10','RESULT7']` | fix round 1 新增：锚点现在换的是 `height: calc(100vh - var(--nav-h) - …)` 那条**基规则**，退回 168px 常量的同时把窄屏该减的导航减项一起摘了 → RESULT10 同红。集合按编号前导整数排序打印，所以是 `RESULT10` 在 `RESULT7` 前面 |
   其余 6 条（`no_sticky`/`page_id_gone`/`modal_container`/`narrow_no_degrade`/`nav_h_gone`/`chat_rail_tall`）**不带** `COLLATERAL`，只红目标那一条。撞错对象长得完全不同：`BAD 没变红`（目标没红）或 `INVALID`（目标在变异前就红）。
   **变异表之外还要补跑一次 RESULT7 的上限那半**（表里没有它的条目，见 Task 1 Step 4 的映射表第 7 行）：往 `assets/css/styles.css` 末尾按字节追加 `#page-chat { padding-top: 100px; }`，跑 `shell_check.py`，必须看到 `RESULT7: FAIL … chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901`（恒等式成立而判定红 —— 这正是要它管住的那种回归），然后按字节还原并核对 `git hash-object assets/css/styles.css` 与追加前一致、`git status --short` 为空。
-- [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
-- [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
+
+  **实测（2026-10-01，两半都跑了）**：
+
+  1. `shell_mutate.py` 不带参数：首行 `变异前基线红项：全绿`，13 行 `OK 变红`，7 行 `COLLATERAL`，末行 `全部断言已被证明会变红`，`exit=0`，跑完 `git status --short` 为空。七条共现的集合与上面白名单**逐字相同**（`sidebar_w_zero ['RESULT1','RESULT2']` / `grid_one_col ['RESULT1','RESULT2','RESULT7']` / `ws_container_gone ['RESULT2','RESULT9']` / `ws_min_width ['RESULT4','RESULT9']` / `sidebar_class_gone ['RESULT1','RESULT5']` / `nav_dup ['RESULT5','RESULT6']` / `chat_vh_old ['RESULT10','RESULT7']`），无 `BAD 没变红`、无 `INVALID`、无 `SKIP`。`nav_h_gone` 与 `chat_rail_tall` 各自只红 `['RESULT10']` —— 这就是「RESULT10 判据两半各由一条变异钉住」的现量：前者两半同红、后者只红前半（竖向装得下但轨道被撑高那一半）。
+  2. 上限补跑（脚本 `F:\tmp\task4fix\cap_check.py`，一次性、不进取变异驱动）：改前 `66018B CRLF=2274 裸LF=0 锚点命中=1`，注入后 `66054B (+36)`。`#page-chat { padding-top: 100px; }` 插在 `.chat-wrap` 基规则**之前**而不是文件末尾 —— 追加到末尾要先证明那里不落在某个 `@media`/`@container` 块内，而锚点插入自带「命中恰好 1 处否则中止」的守卫；产出的红项与配方预期逐字相同，所以这个偏离不改变结论。现量两行红：
+
+  ```
+  RESULT7: FAIL  7 chat 高度 = 工作区可用高度（算术恒等式）  chatBottom=920 期望 chatTop=128 + (vh=900 - padT=28 - padB=80) = 920 ±1，且 <= vh+1=901
+  RESULT10: FAIL  10 窄屏 chat 页竖向装进视口（降级段减掉顶部导航高度）  sidebarH=111 chatH=589 chatBottom=820 + padB=60 <= vh+1=781 scrollH=880 overflowY=100
+  RESULT: FAIL(2/10)
+  ```
+
+  `RESULT7` 就是要证的那条：恒等式 `128 + (900-28-80) = 920` **成立**（等号两边都是 920），判定仍红 —— 红在 `<= vh+1=901` 这半句上。所以上限不是死代码，它管的是「算式自洽但整块被顶出视口」这一类，恒等式单独管不住。第二条红是 `RESULT10`，同因（窄屏那 100px 一起把 chat 顶下去，`overflowY=100`），属共现而非另一条待证性质。还原：`逐字节相同`（脚本里 `now == raw` 直接比字节，比 `git hash-object` 更强），`git status --short -- assets/css/styles.css` 输出为空。
+
+
+- [x] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
+
+  **实测（2026-10-01）**：`/f/Qoder/自媒体/.verify-agent/drive.py` 共打 13 行 —— `RESULT-STREAM: PASS` + `RESULT1: PASS` … `RESULT11: PASS`（11 条编号行，都无证据后缀）+ 末行 `RESULT: PASS`，`exit=0`。端口与 shell harness 不撞（`drive.py` 用 8899 mock provider + 4173 web，`.verify-shell` 用 4174），所以两套可以连跑、不能并跑。
+
+- [x] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
   **这两个脚本没有 `WB_REPO` 会直接抛「需要 WB_REPO 环境变量」**（`check_registry.mjs:13`，实测），不带它就跑是假通过的前置形态：你会看到 Node 堆栈而不是 PASS。
+  > 更正（2026-10-01）：**光有 `WB_REPO` 已经不够了**。`check_registry.mjs` 的比法是「`git show HEAD:assets/js/app.js` 里的 `const PLATFORM_META = {…}` 字面量」对「工作树里 `platforms.js` 的注册表」，而注册表重构已经在 `38c8f23` 落库 —— HEAD 里的 `app.js` 现在是 `Platforms.indexed("home")` 一个调用，没有字面量，脚本在 `:128` 直接抛 `Error: literal PLATFORM_META not found` 并以 exit 1 结束（**它不是静默通过，是响亮地失败**，这一点让这条漂移当场暴露）。已给脚本加 `WB_BASE`（默认 `HEAD`），跑法改成 `WB_REPO=… WB_BASE=19fa8df node /f/tmp/check_registry.mjs`：`19fa8df` 是字面量还在的最后一个 commit（`38c8f23` 的父提交），等价性检查的比较基线本来就该是重构**前**的那份表。这条改动的存在理由：Task 0 之后「HEAD 含字面量」这个前提就没了，任何后续任务复跑 Step 4 都会撞上同一个异常。
+
+  **实测（2026-10-01）**：`check_dangling.mjs` → 22 个 JS 文件逐个 `ok …（N 个声明）` + 末行 `无悬挂引用`，`exit=0`；`check_registry.mjs`（带 `WB_BASE=19fa8df`）→ 末两行 `PASS index.html 在所有消费方之前加载 platforms.js` / `PASS styles.css 四组按平台着色的类都覆盖 8 平台`，`45/45 passed`，`exit=0`。
+
 - [ ] **Step 5:** 桌面：`npm run tauri:dev`，窗口拉到 `minWidth` 1024，逐页翻一遍
   这一步是全计划唯一的人眼验收（Task 2 Step 6b、Task 3 Step 7b 都把账记在这里），自动化量的是几何与异常，量不出「像不像 Easel」。要看的清单：
   - 左栏 12 项的指认难度、`.nav-link.active::before` 那 3px 竖条够不够强（不够就调 Task 2 Step 4 的 `.sidebar .nav-link` 内边距/`gap`，别留成待办）；宽屏上会出现两条滚动线（sticky 侧栏 + 文档滚动），确认它看着是设计而不是坏了。
@@ -1448,11 +1494,23 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
   - **模态里的 `.grid-3`**：`metrics.js:534` 渲染 `<div class="grid grid-3">` 在模态内，Task 3 的容器化让它现在塌成 2 列（模态内容盒实测 **590** ≤ 916，走 `.grid-3,.grid-4 → repeat(2,1fr)` 那条；576 那条 `→ 1fr` 不触发）。方向上是想要的（与 `.editor-layout` 同一个既有 bug 家族），但**没有任何断言覆盖它**，只能看。评审已排除其它在模态内渲染的候选（`.metrics-dashboard`/`.cal-stats`/`.calendar-grid`/`.cal-week-grid`/`.card-design-layout`/`.hr-topic-*`/`.platform-compliance-grid` 都是页面级渲染；`.modal-lg` 目前无人引用），所以爆炸半径就是 `.grid-3/.grid-4` + `.editor-layout`。
   - **761..823 这一段没人看过**（fix round 1 记的账）：它是「15 条容器规则已全部收到最窄形态，但侧栏还没降级」的区间。断点 760 的两条硬约束是 `< 1024`（Tauri `minWidth`，桌面包永不进降级）与 `≤ 824`（= 496 + 264 + 64，最后一条容器规则收完的视口），760 同时满足；但 harness 只在 761 与 800 两档实测过这一族宽度（两档都 10/10 PASS + exit 0），中间宽度是算术推出来的、不是量出来的。把窗口在这段里拖一拖，看侧栏那 12 项在工作区被压到 ~430px 时有没有挤坏。
   - **矮视口（`vh < 711`）窄屏 chat 会重新出现竖向滚动 —— 这条是设计代价，不是回归**：`.chat-wrap` 的 `min-height: 520px` 地板起跳（520 + 降级导航 111 + padT 20 + padB 60 = 711）。`RESULT10` 钉在 vh=780，量不到这一档；改壳前同样如此（390×640：`640 - 168 = 472 < 520` → 也是 520、也溢出），所以 Task 4 fix round 1 明确不动地板。要看的是：手机横屏/小窗口下 chat 输入框滚动一次就够得着，且不把别的内容顶出视口。
+
+  **进度（2026-10-01）：这一步没做完，不能打勾 —— `npm run tauri:dev` 开的是 WebView2 原生窗口，控制器没有真窗口的眼睛，不会假装看过。** 已经做的是它能被代替的那一半：Chromium 里把清单逐条走了一遍并留了 12 张截图（`F:\tmp\task4fix\shots\`，1440/1024/820/390 四档 × dashboard/chat + 1440 滚动态 + 1440 设置代理态 + 1440 模态 `.grid-3`），`JS错误: []`。清单的 Chromium 口径：
+  - **左栏 12 项指认 + 3px 竖条**：1440/1024/820 三档 12 项全部单行不换行、无截断；`active` 项是「淡底 pill ＋ 左缘 3px 竖条」两层，pill 承担主要指认、竖条承担精确定位，深色底上两者都看得见（`仪表盘`/`助手`/`账号与设置` 三处分别可核）。**判断：够强，不调 Task 2 Step 4 的内边距/`gap`。** WebView2 与 Chromium 同内核家族，但字体渲染与 DPI 缩放不同，这一条仍要真窗口确认一次。
+  - **两条滚动线**：dashboard 在 1440×900 下 `scrollHeight=1174 > vh=900`，滚到底 `scrollY=274` 时 `.sidebar` 的 `getBoundingClientRect().top` 仍是 `-0.0`、active 项稳定在 `y=62` —— 侧栏纹丝不动，且**没有出现第二条滚动条**（侧栏 12 项不超高，自身 `overflow` 不触发）。观感是一条文档滚动线 ＋ 一块钉住的板，读起来是设计。
+  - **模态里的 `.grid-3`**：`showModal` 一个 `<div class="grid grid-3">` 三格，1440 档下 `modalW=640 → tracks=2（'286px 286px'）`，与预期一致（容器化后按模态自身宽度折叠）。这条**依然没有任何断言覆盖**，截图只是留证，不是判据。
+  - **761..823 从「没人看过」变成「820 档五页看过」**：`820×900` 下 `wsW=556`、`.sidebar` 仍 `sticky`（未降级，符合 760 断点），dashboard/hot-radar/calendar/content 首张卡片一律 `w=492 x=296`，`grid-4` 与 `grid-2` 全部塌成 1 列，`overflowX=0`、`JS错误=[]`；chat 页同档 `rail 190 / main 288 / tools display:none`。截图是干净的单列堆叠，没有挤坏。761..819 与 821..823 之间的其余宽度仍是算术推的；Task 4 fix round 1 记的 761/800 两档 `10/10 PASS` 也只是断言绿、不是人眼看过。
+  - **一处 harness 假象，别当缺陷记**：1440/1024 截图里侧栏底部那条悬空横线是 `.sidebar-foot` 的 `border-top`（`styles.css:193`）—— 它仅有的两个子节点 `#userBadge`、`#btnLogout`（`index.html:84-85`）都带 `hidden`，而未登录时整块被 `#authMask` 盖住，真机上看不见。它出现在截图里，只因为本 harness 为拍到壳层把 `#authMask` 手动 `display:none` 了。
 - [ ] **Step 6:** 线上：部署后跑一次 `cors_check.py` 对照 + 在手机宽度（390）逐页翻一遍
   390 这一档的具体看点（fix round 1 加的，别只翻 dashboard —— `RESULT9` 量的就是 dashboard，其余页的竖向表现此前无人覆盖）：
   - **chat 页输入框不滚动就能碰到**（这就是 `RESULT10` 那条性质的真人口径；它 2026-10-01 之前是红的：390×780 下溢出 83px，输入框落在折叠线以下）。
   - 「降级 = 等价改壳前的观感」这句**只是近似**：改壳前是 brand + nav 同一行内联、整条 `position: sticky`；降级后是 brand/nav/foot 竖排、`position: static`，也就是**顶部导航会随着文档滚走**。如果这在你看来是不可接受的，那要改的是 Task 4 降级段的定位，不是把 `RESULT10` 的判据挪开。
   - 顶部导航横滑（`.sidebar .nav` 实测 scrollW 恒 1030，十档宽度不换行）在真机上手指滑动是否顺；`.sidebar-foot` 在降级后是否还在碍事（它现在 `margin-top: 0`，Task 4 评审证明那条是死声明，保留而非删除）。
+
+  **进度（2026-10-01）：同样没做完，不打勾。** 「部署后跑 `cors_check.py` 对照」要先把这轮改动推上去并部署（push 需用户单独批准），「手机宽度真机翻页」要真机。Chromium 里 390×780 能测的都已测到，另补两条只有眼睛能看见的发现：
+  - **390 的 chat 页横向是挤的，不是竖向溢出的**：`RESULT10` 管的是竖向（现量 `chatBottom=720 + padB=60 <= vh+1=781`、`overflowY=0`，绿），横向 `overflowX=0` 也绿 —— 两条判据都对，但 `.chat-main` 只剩 **154px**：`390 → wsW 390（降级后侧栏在上方）→ .chat-wrap 358 → .chat-rail 190 + gap 14 → main 154`。截图里标题「新对话」竖成一字一行、`自动选择工具` 下拉几乎占满主栏。**这不是本轮引入**：改壳前 `.chat-rail` 同样是 `flex: 0 0 190px`，窄侧只折叠 `.chat-tools`（`git show ad34f3d~1:assets/css/styles.css` 的 `:1992` 与 `:2068`），按同一批常量算当时主栏 ≈ `390 − 64 − 190 − 14 = 122px`（`64` 来自旧 `.app-shell { padding: 28px 32px 80px }`，同文件 `:157`）—— 也就是今天比改壳前**宽 32px**。要写清楚证据级别：`122` 是从旧常量**算**出来的，没有在改壳前的树上跑过浏览器。要不要在 ≤480 容器下把 `.chat-rail` 收成一行按钮，是产品决定，不在本计划授权范围，记为**故意不修**。
+  - **降级导航横滑的最后一项被切在字中间**：390 截图里 `视频脚本` 只剩 `视频脚` 的半个字，右缘没有渐隐、也没有可见滚动条（Chromium 无头截图里 overlay 滚动条不显示）。真机手指能不能发现这一排可以继续滑，只有真人知道 —— 这条是清单里「scrollW 恒 1030」那一问的人眼部分，自动化答不了。
+  - `vh < 711` 的地板档（手机横屏/小窗口）本轮仍未量：`RESULT10` 钉在 vh=780，Chromium 里可以伪造但要另写探针，而它的真机意义（横屏手持设备）本来也只能真人看。留给人眼清单。
 
 ---
 
