@@ -12,15 +12,17 @@
 WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
   const MAX_TURNS = 6;
 
-  /** 可被模型查询的表；不在表内的直接拒绝，避免变成任意 SQL 读口 */
+  /** 可被模型查询的表；不在表内的直接拒绝，避免变成任意 SQL 读口
+   *  列名与 supabase/schema.sql 真实结构严格一致，模型过滤/排序只能用它 */
   const READABLE_TABLES = {
-    topics: ["id", "title", "platform", "status", "score", "source", "created_at"],
-    contents: ["id", "title", "platform", "status", "type", "updated_at"],
-    schedules: ["id", "content_id", "platform", "publish_date", "status"],
-    assets: ["id", "name", "type", "url", "tags", "created_at"],
-    metrics: ["id", "content_id", "platform", "views", "likes", "comments", "published_at"],
-    keywords: ["id", "word", "platform", "heat", "updated_at"],
+    topics: ["id", "title", "platform", "track", "status", "is_hot", "source", "priority", "created_at"],
+    contents: ["id", "title", "topic_id", "status", "tags", "priority", "created_at"],
+    schedules: ["id", "content_id", "account_id", "platform", "scheduled_at", "actual_published_at", "publish_url", "reminder_sent", "created_at"],
+    assets: ["id", "type", "title", "url", "tags", "platform", "created_at"],
+    metrics: ["id", "content_id", "platform", "views", "likes", "favorites", "comments", "shares", "followers_gained", "recorded_at"],
+    keywords: ["id", "word", "category", "platform", "track", "hot_score", "status", "created_at"],
   };
+  const TABLE_COLS_JSON = JSON.stringify(READABLE_TABLES);
 
   const tools = new Map();
 
@@ -43,13 +45,13 @@ WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
 
   // ===== 基础工具：库的只读视图 =====
   register("db_list", {
-    description: "按条件查询工作台数据表，返回精简行。table 可选：" + Object.keys(READABLE_TABLES).join(", "),
+    description: "按条件查询工作台数据表，返回精简行。各表可用列（过滤 eq / 排序 order_col 只能用这些列名）：" + TABLE_COLS_JSON,
     parameters: {
       type: "object",
       properties: {
         table: { type: "string", enum: Object.keys(READABLE_TABLES) },
-        eq: { type: "object", description: "等值过滤，如 {platform:'xhs',status:'待写'}" },
-        order_col: { type: "string", description: "排序列，默认 created_at" },
+        eq: { type: "object", description: "等值过滤，列名必须取自上表可用列；示例 {platform:'xhs', status:'idea'}" },
+        order_col: { type: "string", description: "排序列，必须是上表可用列，默认 created_at" },
         ascending: { type: "boolean", default: false },
         limit: { type: "integer", maximum: 50, default: 20 },
       },
@@ -57,7 +59,7 @@ WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
     },
   }, async ({ table, eq, order_col, ascending, limit }) => {
     const cols = READABLE_TABLES[table];
-    if (!cols) throw new Error(`表 ${table} 不在可读清单内`);
+    if (!cols) throw new Error(`表 ${table} 不在可读清单内，可用：${Object.keys(READABLE_TABLES).join(", ")}；示例 db_list {table:"topics", eq:{platform:"xhs"}, limit:20}`);
     const rows = await Db.list(table, {
       select: cols.join(","),
       eq: eq || undefined,
@@ -78,7 +80,7 @@ WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
       required: ["table", "id"],
     },
   }, async ({ table, id }) => {
-    if (!READABLE_TABLES[table]) throw new Error(`表 ${table} 不在可读清单内`);
+    if (!READABLE_TABLES[table]) throw new Error(`表 ${table} 不在可读清单内，可用：${Object.keys(READABLE_TABLES).join(", ")}；示例 db_get {table:"contents", id:"<uuid>"}`);
     return { table, row: await Db.get(table, id) };
   });
 
@@ -101,7 +103,7 @@ WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
   const baseCtx = {
     async callTool(name, args) {
       const t = tools.get(name);
-      if (!t) throw new Error(`未知工具 ${name}`);
+      if (!t) throw new Error(`未知工具 ${name}，可用工具：${[...tools.keys()].join(", ")}`);
       return await t.run(args || {}, baseCtx);
     },
   };
@@ -142,7 +144,7 @@ WB.define("Agent", ["AiGateway", "Db"], (AiGateway, Db) => {
     } catch (e) {
       return { ok: false, error: `参数不是合法 JSON：${e.message}` };
     }
-    if (!t) return { ok: false, error: `未知工具 ${name}` };
+    if (!t) return { ok: false, error: `未知工具 ${name}，可用工具：${[...tools.keys()].join(", ")}` };
     try {
       const result = await t.run(args, baseCtx);
       const detail = preview(result);
