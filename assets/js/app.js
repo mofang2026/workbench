@@ -389,6 +389,7 @@ async function switchPage(pageName) {
 
   // 模块懒加载渲染
   const PAGE_MODULES = {
+    "chat": "Chat",
     "hot-radar": "HotRadar",
     "content": "ContentEditor",
     "calendar": "Calendar",

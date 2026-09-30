@@ -457,6 +457,133 @@ WB.define("AiGateway", [], () => {
     }
   }
 
+  // ===== Agent 入口：完整 messages 数组 + tools（generate/stream 的扁平签名承载不了多轮） =====
+
+  /**
+   * 代理路由（api/ai/*）只收 {prompt, system} 且只回传 delta.content，
+   * tools 与 tool_calls 两头都会被剥掉，所以 Agent 必须走直连。
+   */
+  function requireDirect() {
+    const s = getSettings();
+    if (s.mode === "proxy" && !isCloudBaseEnv()) {
+      throw new Error("Agent 需要「直连模式」：代理路由不透传 messages/tools，请在设置里切换");
+    }
+    const providers = getAvailableProviders();
+    if (!providers.length) {
+      throw new Error("未配置可用的 AI 提供商，请在「账号与设置」填写 API Key");
+    }
+    // 推理模型（deepseek-reasoner 等）不支持 function calling，Agent 一律用对话模型
+    return providers.map((p) => ({
+      name: p.name, key: p.apiKey, model: p.model, baseUrl: p.baseUrl.replace(/\/+$/, ""),
+    }));
+  }
+
+  function agentBody(messages, opts, stream) {
+    const body = {
+      model: opts.model,
+      messages,
+      stream: !!stream,
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens ?? 2048,
+    };
+    if (opts.tools && opts.tools.length) {
+      body.tools = opts.tools;
+      if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+    }
+    return body;
+  }
+
+  async function sendMessages(messages, opts = {}) {
+    const providers = requireDirect();
+    const errors = [];
+    for (const p of providers) {
+      try {
+        const res = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
+          body: JSON.stringify(agentBody(messages, { ...opts, model: p.model }, false)),
+          signal: opts.signal,
+        });
+        if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        if (!choice?.message) throw new Error("响应缺少 choices[0].message");
+        return { message: choice.message, usage: data.usage || null, provider: p.name, finish: choice.finish_reason };
+      } catch (e) {
+        if (e.name === "AbortError") throw e;
+        errors.push(`${p.name}: ${e.message}`);
+      }
+    }
+    throw new Error(`所有提供商均失败 → ${errors.join(" | ")}`);
+  }
+
+  /** 流式 tool_calls 按 index 分片到达，arguments 是逐段拼接的字符串 */
+  function toolCallSink() {
+    const slots = [];
+    return {
+      push(deltaToolCalls) {
+        for (const tc of deltaToolCalls || []) {
+          const i = tc.index ?? slots.length;
+          if (!slots[i]) slots[i] = { id: "", type: "function", function: { name: "", arguments: "" } };
+          if (tc.id) slots[i].id = tc.id;
+          if (tc.function?.name) slots[i].function.name += tc.function.name;
+          if (tc.function?.arguments) slots[i].function.arguments += tc.function.arguments;
+        }
+      },
+      value() { return slots.length ? slots : null; },
+    };
+  }
+
+  async function streamMessages(messages, opts = {}) {
+    const providers = requireDirect();
+    const errors = [];
+    for (const p of providers) {
+      const sink = toolCallSink();
+      let text = "";
+      try {
+        const res = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
+          body: JSON.stringify(agentBody(messages, { ...opts, model: p.model }, true)),
+          signal: opts.signal,
+        });
+        if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            let obj;
+            try { obj = JSON.parse(payload); } catch { continue; }
+            const delta = obj.choices?.[0]?.delta || {};
+            if (delta.content) { text += delta.content; opts.onChunk?.(delta.content); }
+            if (delta.reasoning_content && opts.onReason) opts.onReason(delta.reasoning_content);
+            if (delta.tool_calls) sink.push(delta.tool_calls);
+          }
+        }
+        return {
+          message: { role: "assistant", content: text || null, tool_calls: sink.value() },
+          usage: null, provider: p.name, finish: sink.value() ? "tool_calls" : "stop",
+        };
+      } catch (e) {
+        if (e.name === "AbortError") throw e;
+        errors.push(`${p.name}: ${e.message}`);
+        if (text) throw e; // 已经吐过字，换提供商会把上文重复一遍，宁可报错
+      }
+    }
+    throw new Error(`所有提供商均失败 → ${errors.join(" | ")}`);
+  }
+
   return {
     getSettings,
     saveSettings,
@@ -465,6 +592,8 @@ WB.define("AiGateway", [], () => {
     generate,
     stream,
     streamIntoEl,
+    sendMessages,
+    streamMessages,
     PROVIDER_PRESETS,
   };
 });
