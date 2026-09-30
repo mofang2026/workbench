@@ -669,12 +669,13 @@ harness 在仓库外，无需 commit；第一个参数可覆盖桌面巡检宽�
 - Consumes: 现有类名 `.brand/.brand-logo/.nav/.nav-link/.hidden`（`styles.css:113-145, 468`）与 id `userBadge/btnLogout/mainNav`
 - Produces: `.app-shell`（grid 容器）、`.sidebar`、`.workspace`（`container-name: ws`）、token `--sidebar-w/--ws-pad-t/--ws-pad-b` —— Task 3/4 与 `shell_check.py` 都按这些名字量
 
-- [ ] **Step 1: 确认基线（与 Task 1 Step 2 逐字一致才算）**
+- [x] **Step 1: 确认基线（与 Task 1 Step 2 逐字一致才算）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 Expected: 红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8`，末行 `RESULT: FAIL(4/9)`。多出或少掉任何一条，都说明工作树被别的改动动过——先回查（`git status --short`、Task 0 是否已落库），不要开始改 markup。
+**实测（Task 2 执行前，2026-09-30，HEAD `136ecc8`）**：逐字复现 —— `RESULT: FAIL(4/9)`，红项 `RESULT1/RESULT2/RESULT5/RESULT8`，`RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0`。开工前两文件 100% CRLF（`index.html` 12280B/259 行、`styles.css` 61933B/2185 行，bare-LF 均为 0）。
 
-- [ ] **Step 2: 改 markup**
+- [x] **Step 2: 改 markup**
 
 把 `index.html:62-89`（`<!-- ========== 顶部导航 ========== -->` 起，到 `<main class="app-shell">` 止）整段替换为：
 
@@ -717,8 +718,9 @@ Expected: 红的正好是 `RESULT1/RESULT2/RESULT5/RESULT8`，末行 `RESULT: FA
 ```
 
 约束核对（不要顺手改）：12 个 `<section id="page-*" class="page">` 的 id、class、顺序全部原样；`#authMask`（:18）与 `#toast`（:230）保持 body 级兄弟节点，不能被挪进 `.workspace`（`shell_check.py` 的 RESULT8 就是量这件事）。
+**实测（Task 2）**：两段都按上面的块逐字落地。`grep -o 'id="page-[a-z-]*" class="page'` 得 12 条、顺序与改前一致（dashboard/chat/hot-radar/content/calendar/assets/card-design/video-script/metrics/templates/rules/settings）；`#authMask`（现 `:18`）与 `#toast`（现 `:231`）仍在 `.app-shell`（`:63-228`）之外，awk 区间内 `authMask|id="toast"` 命中 0。零 JS 改动（`git diff HEAD --name-only` 只有 `index.html`、`assets/css/styles.css`）。`</main>` 闭合按本步给的块保持 6 空格缩进，`.workspace` 内 12 个 section 的缩进未动（不改缩进是为了让 diff 只装结构变化）。
 
-- [ ] **Step 3: 删掉两条会一起搬错的死 CSS**
+- [x] **Step 3: 删掉两条会一起搬错的死 CSS**
 
 Run（确认这两个选择器只被 CSS 自用，没有任何 JS 引用）：
 ```bash
@@ -732,8 +734,9 @@ CSS 侧的 `topbar` 引用实测**总共只有这 3 处**（`grep -n "topbar" as
 cd "/f/Qoder/自媒体/自媒体工作台/workbench" && grep -c "topbar" assets/css/styles.css
 ```
 Expected: `0`（改前是 3）。非 0 就是漏了 `:224` 那条媒体块里的覆盖。
+**实测（Task 2）**：`grep -rn "topbar" assets/js/ | wc -l` = **0**；`grep -c "topbar" assets/css/styles.css` 由 **3 → 0**。删的是 `.topbar`（连同它上面那条 `/* ── 顶部导航 ── */` 孤儿注释，它带的正是全文件唯一的 `position: sticky;`）、`.topbar-right`、以及 `@media (max-width: 640px)` 里的 `.app-shell{padding}` 与 `.topbar{padding}` 两行。删后该媒体块只剩 `.grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }` 一条（Task 3 Step 1 把它转成 `@container ws (max-width: 576px)`）。`userBadge`/`btnLogout` 的 6 处引用仍全部按 id 取元素（`app.js:51/56/57/129/130/131`），搬进 `.sidebar-foot` 未牵连 JS。
 
-- [ ] **Step 4: 写 shell CSS**
+- [x] **Step 4: 写 shell CSS**
 
 在 `styles.css:6` 起的 `:root` 块内，`--radius-*` 那组之前插入：
 
@@ -820,35 +823,47 @@ Expected: `0`（改前是 3）。非 0 就是漏了 `:224` 那条媒体块里的
 - `.modal` 也声明成同名容器：`showModal()` 把 `.modal-mask` 挂到 `document.body`（`utils.js:80-86`，实测 `parent === "BODY"`），它在 `.workspace` 之外，容器查询对它是瞎的。给它同一个 `container-name: ws`，Task 3 翻转的那 15 条断点才会继续作用于模态内部，顺带修掉「编辑器在 640px 模态里挤两列」的既有 bug。
 - **与 Easel 有意不同的一处**：Easel 关掉文档滚动、每页自己滚（`web/frontend/src/styles/index.css:55-60` 的 `html,body{height:100%;overflow:hidden}`、`:83` `.app-layout{display:flex;height:100%}`、`:85-93` `.sidebar{width/min-width:var(--sidebar-width) 264px;height:100%;overflow:hidden}`、`:210` `.main-content{flex:1;height:100%;overflow:hidden}`）。这里选 **sticky 侧栏 + 文档滚动**，因为本计划的验收线之一是零 JS 改动：12 个 `.page` 今天全在文档流里、没有一个是自己的滚动容器，照抄 Easel 的高度锁死模型就得逐页补高度链与 `overflow-y:auto`（12 处牵连 + `chat.js` 那 5 处 `scrollTop` 写入的落点会变）。代价说清楚：侧栏 `height:100vh` 且自己 `overflow-y:auto`，右栏随文档滚，宽屏上会出现两条滚动线；`.sidebar{z-index:60}` 保证滚动的内容从侧栏下方穿过时不盖住它。
 - 常驻侧栏的真实代价，不掩盖：`.workspace` 保留 `max-width: 1320px`，整个壳最宽 1584。在 1440 视口下工作区只有 `1440-264 = 1176`、内容 `1112`，比今天的 `1256` 窄 **144px**。要 264 侧栏和 1256 内容同时成立需要 1584 以上视口，物理上不可兼得。这一条直接决定了 Task 3 Step 1 里 `.chat-tools` 阈值的特例。
+**实测（Task 2）**：token 三条落在 `styles.css:46-49`（`:root` 内、`--radius-*` 组之前）；shell 块落在 `:138-204`（`/* ── 主体容器 ── */` 起，含 `.app-shell` grid `:139` / `.sidebar` sticky `:146` / `.sidebar-foot` `:182` / `.workspace` `container-name: ws` `:191` / `.modal` 同名容器 `:201`）。Step 4 的每一段都真进了文件——用 `shell_mutate.py` 的锚点命中数当探针复核（按 `locate()` 的「逻辑锚点」口径，CRLF 与 LF 两种拼法分开数再相加）：`--sidebar-w: 264px;`、`position: sticky;`、`grid-template-columns: var(--sidebar-w) minmax(0, 1fr);`、`.workspace {`+两行容器声明、`box-sizing: border-box;`+`min-width: 0;`、`<aside class="sidebar">`、`<a class="nav-link" data-page="chat">助手</a>`、`.modal` 三行块 **各 1 处**（`position: sticky;` 全文件从 `.topbar` 的 1 处换手为 `.sidebar` 的 1 处，仍唯一，`no_sticky` 才有得可证）。落盘后两文件仍 100% CRLF、bare-LF 0。另量了一条本步没有断言覆盖的风险：`.modal` 上加 `container-type: inline-size` 会带来 inline-size containment（自身宽度不得依赖内容），实测 `showModal()` 出的 `.modal` 在 1440/1024 两档都是 **640px**（`max-width: 640px` 生效、没被压塌成 0），`.modal-lg` **920px**，`maskW` 仍等于视口宽，模态内 `scrollWidth 638 ≤ 640`，JS 错误 0。
 
-- [ ] **Step 5: 跑 harness**
+- [x] **Step 5: 跑 harness**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 Expected（本任务结束时应有 **3 红 6 绿**：`RESULT7/8/9`，每条红都指向后面哪个任务修它）：
 - 转 PASS：`RESULT1`、`RESULT2`（现在还含 `.workspace` 的 `container-name: ws`，就是 Step 4 那段）、`RESULT5`
 - **转 FAIL（新红，预期内）**：`RESULT7`。`168px` 这个常量是给「顶栏 60 + `.app-shell` 上下内边距 28+80」凑的；顶栏一撤、`.workspace` 改用 `--ws-pad-t: 28`，`.chat-wrap` 顶边就从实测的 `93` 抬到约 `33`，`chatBottom` 由 `825` 掉到约 `765`，落在判定带 `[814, 901]` 之外。**765 是算术推的，不是实测**：跑完把 harness 打印的真实值记进本步的勾选备注里，Task 3 Step 3 用 `calc(100vh - var(--ws-pad-t) - var(--ws-pad-b))` 修。
+  **实测（Task 2 跑完后）= `chatBottom=760`**（1440 与 1024 两档同值，判定带只看 vh=900），比算术推的 765 低 5px，仍落在 `[814, 901]` 之外 → 红的是这条断言该红的方向。`shell_check.py` 一个字节没改，判定带留给 Task 3 用实测值收紧。
 - **转 FAIL（新红，由断言构造决定）**：`RESULT9`。Task 2 给 `.app-shell` 写的是**无条件** `display: grid`，而 RESULT9 断言 390 视口下 `display == "block"`；侧栏此时还占着 264px。Task 4 的 `@media (max-width: 760px)` 降级段修它。
 - 仍 FAIL：`RESULT8`（`tracks: 2`，Task 3 修）
 - 必须仍 PASS：`RESULT3`、`RESULT4`、`RESULT6` —— 其中 `RESULT4` 一旦红，就是 `minmax(0, 1fr)` 或 `min-width: 0` 漏了，立刻回查，不要留给后面的任务
+**实测（Task 2，逐字输出见 `task-2-report.md`）**：默认档（1440）**3 红 6 绿**，红项正是 `RESULT7/RESULT8/RESULT9`，`RESULT1/2/5` 转 PASS，`RESULT3/4/6` 仍 PASS，`RESULT-OFFLINE: PASS`，exit 1 —— 与本步预期逐字一致。
+**额外证据步（controller ruling，本任务的 Step 5 附加项）**：跑「Task 2 之后锚点才存在」的那 8 个变异，证明这批断言不是空跑 —— `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col ws_container_gone page_id_gone ws_min_width sidebar_class_gone nav_dup`。实测首行 `变异前基线红项：['RESULT7', 'RESULT8', 'RESULT9']`（与本轮 3 红一致），8 行全部 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0；**0 SKIP**（= Step 4 的每一段都真在文件里）、**0 INVALID**（8 个目标断言都不在预期红集 {7,8,9} 内）、**0 ANCHOR**（锚点各唯一）、无 `还原失败（字节级）`；跑完两文件与变异前 `cmp` 字节相同、`git status --short` 只剩这两个 M。共现红项：`sidebar_w_zero` 带 `COLLATERAL ['RESULT1','RESULT2']`、`nav_dup` 带 `COLLATERAL ['RESULT5','RESULT6']`（后一条是计划 :651 预告的 Task 2 之后设计如此，不是缺陷）；`grid_one_col`、`sidebar_class_gone` 也各带一条 `COLLATERAL`（把 grid 改成单列会连带打红 RESULT1、去掉 `.sidebar` 类会连带打红 RESULT1 —— 都是断言承重的表现，目标项各自已变红）。
+**额外一档（`shell_check.py 1024`，本步未要求，是 Task 3 Step 4/5 要跑的口径）**：`RESULT4` 在这档 **FAIL `card-design(+186px)`**，其余与 1440 档同（7/8/9 红）。按本步「RESULT4 一旦红就回查」当场回查过：`minmax(0, 1fr)` 与 `min-width: 0` 两段都在文件里（Step 4 的锚点命中数各 1），**不是漏写护栏**；真实成因是 `.card-design-layout` 的 `@media (max-width: 900px) → 1fr`（`styles.css:1531-1532`）按视口判定 —— 1024 视口下它不触发，而容器只有 696（`1024-264-64`），三列 `180px 1fr 260px`（`:1528-1529` 那条 1100px 档）的中列被 `.cd-editor` 的 min-content 顶到 442px，`.workspace` `scrollWidth 946 > clientWidth 760`。这条正是 Task 3 Step 1 换算表里 `max-width: 900px → @container ws (max-width: 836px)` 要收的：容器 696 ≤ 836 会把它降成单列。改壳前同档同页 `RESULT4` 是 PASS（1024 视口下内容 960，三列装得下），所以这是改壳的**已知几何代价**、不是新 bug，且 Task 2 未动任何 `.card-design-*` 规则。
 
-- [ ] **Step 6: 人工看一眼主窗口宽度**
+- [x] **Step 6: 人工看一眼主窗口宽度**
 
 Run: `cd "/f/Qoder/自媒体/自媒体工作台/workbench" && npx serve . -l 4173` → 浏览器开 `http://127.0.0.1:4173`，把窗口拖到 1024（Tauri `minWidth` 下限）。
 Expected: 侧栏 264 固定，右栏 760 起，无横向滚动条。
 注意：本计划的自动化只跑 Chromium（Playwright），WebView2 里若出现差异需人工反馈，自动化不声称覆盖它。
+**实测（Task 2，按 controller ruling 换了执行方式）**：`npx serve` **没有跑** —— 它会阻塞并且与 harness 的 4174 单实例端口抢资源；改用一次性 Playwright 脚本 `/f/tmp/task2/shot.py`（自带 4175 静态服务、外部请求全 abort、按 `.verify-shell` 的口径打桩 Db/Supabase，并把未登录时盖住整壳的 `#authMask` 手动 `.add("hidden")`）在 1024x768 与 1440x900 各截图一张并量几何：
+- 1440x900：`sidebarW=264 sidebarX=0 sidebarPos=sticky wsX=264 wsW=1176 scrollWidth=1440 overflowX=0 hasScrollbarH=False display=grid`
+- 1024x768：`sidebarW=264 sidebarX=0 sidebarPos=sticky wsX=264 wsW=760 scrollWidth=1024 overflowX=0 hasScrollbarH=False display=grid`
+即「侧栏 264 固定、右栏 760 起、dashboard 无横向滚动条」在两档都成立。**但这不是人眼验收**：截图只证明了几何，`card-design` 页在 1024 档确有 186px 横向溢出（见 Step 5 那条），`dist/` 未同步（Task 5），**WebView2 / Tauri 没有任何自动化覆盖**，本步的人工看一眼仍挂着 —— 需要人在真窗口里过一遍（Task 6 Step 5 是它的正式档）。
 
-- [ ] **Step 7: Agent 全链路没被改坏**
+- [x] **Step 7: Agent 全链路没被改坏**
 
 Run: `cd /f/Qoder/自媒体/.verify-agent && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" drive.py`
 Expected: `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（改壳前基线已复跑确认，见差异表 A）。尤其 `RESULT7 面板工具`（左栏工具面板渲染）与 `RESULT11`（两步确认删除 + 清空会话）：chat 页 DOM 位置变了，这两条最容易受牵连。
+**实测（Task 2 改壳后）**：全绿 —— `RESULT-STREAM: PASS` + `RESULT1…RESULT11: PASS`（12 行）+ 末行 `RESULT: PASS`，**exit 0**。点名那两条：`RESULT7` 打的是 `面板工具: ['db_list','db_get','db_stats','skill_topic_schedule_gap'] | 技能标记: 1`、`面板可读表` 6 张、`RESULT11` 的两步确认（`确认删/取消`）与二次清空（`确认清空？→ 清空本会话`）都按预期走。stdout 里 `JS 错误(全程): (无)`；stderr 有一段 `ConnectionAbortedError: [WinError 10053]` 的 traceback，来自 `mock_provider.py:86` 在 RESULT5「停止生成」那一轮被客户端掐断 —— 那是驱动自己的既有噪声，与 shell 无关，该轮 `RESULT5: PASS`、末行仍是 `RESULT: PASS`。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd "/f/Qoder/自媒体/自媒体工作台/workbench"
 git add index.html assets/css/styles.css
 git commit -m "feat(shell): 顶部横向导航改为常驻左栏 + 右工作区"
 ```
+
+**实测（Task 2）**：已按上头两条命令落库 —— `ad34f3d feat(shell): 顶部横向导航改为常驻左栏 + 右工作区`，`2 files changed, 94 insertions(+), 49 deletions(-)`（只 `index.html` + `assets/css/styles.css`，未 `git add -A`、未动 `dist/`、未 `--amend`、未 `--no-verify`、未 push）。本计划文档的复选框与实测量按 controller ruling 单独一个 `docs(plan)` commit，不与代码混在一起。
 
 ---
 
