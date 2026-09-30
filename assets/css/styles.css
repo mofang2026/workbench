@@ -199,9 +199,11 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   padding: var(--ws-pad-t) 32px var(--ws-pad-b);
 }
 /* 模态与工作区共用容器名 ws：容器查询解析到最近的同名祖先容器，所以模态里的布局量的是
-   模态自己的内容盒（实测 640 - 2×24 padding = 592），不是背后工作区的宽度。
+   模态自己的内容盒 —— 2026-10-01 实测 590（在 .modal 里放一个 width:100cqw 的探针量到的，
+   不是算出来的：max-width 640 在 border-box 下含 2×1 border 与 2×24 padding，
+   640-2-48=590；只减 padding 会得 592，差在那两条边框上）。这三个数改了要重量，别照抄。
    同一批「容器 ws」查询因此不用为模态再写一份 —— 模态里 .editor-layout 挤成两列的既有 bug
-   就是这么修掉的：那条单列规则原来按视口判，1440 视口下永远不触发，如今按 592 判。 */
+   就是这么修掉的：那条单列规则原来按视口判，1440 视口下永远不触发，如今按 590 ≤ 916 判。 */
 .modal {
   container-type: inline-size;
   container-name: ws;
@@ -2115,7 +2117,9 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .chat-tables code { font-size: 11px; color: var(--brand); }
 /* 全站唯一不按 -64 平移的阈值（原视口断点 1180px）：这条是「三栏硬底」型，不是内容宽度平移型。
    硬底 = .chat-rail 190 + .chat-tools 232 + gap 14×2 = 450，再给 .chat-main 留 350 → 800。
-   实测：容器 1112（视口 1440）→ 三栏、.chat-main 662；容器 696（视口 1024）→ 退两栏。
+   这三个数分别是 .chat-wrap 的 gap、.chat-rail 与 .chat-tools 的 flex-basis，都在本文件里，
+   改了就重算 800，别只改这条注释。
+   实测（2026-09-30，1440/1024 两档）：容器 1112 → 三栏、.chat-main 662；容器 696 → 退两栏。
    若照抄 1180-64=1116，1440 下 1112 ≤ 1116 会命中，助手页在开发机常用宽度上丢工具栏。 */
 @container ws (max-width: 800px) { .chat-tools { display: none; } }
 
