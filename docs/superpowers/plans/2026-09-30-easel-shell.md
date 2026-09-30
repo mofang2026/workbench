@@ -839,7 +839,7 @@ Expected（本任务结束时应有 **3 红 6 绿**：`RESULT7/8/9`，每条红�
 **额外证据步（controller ruling，本任务的 Step 5 附加项）**：跑「Task 2 之后锚点才存在」的那 8 个变异，证明这批断言不是空跑 —— `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col ws_container_gone page_id_gone ws_min_width sidebar_class_gone nav_dup`。实测首行 `变异前基线红项：['RESULT7', 'RESULT8', 'RESULT9']`（与本轮 3 红一致），8 行全部 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0；**0 SKIP**（= Step 4 的每一段都真在文件里）、**0 INVALID**（8 个目标断言都不在预期红集 {7,8,9} 内）、**0 ANCHOR**（锚点各唯一）、无 `还原失败（字节级）`；跑完两文件与变异前 `cmp` 字节相同、`git status --short` 只剩这两个 M。共现红项：`sidebar_w_zero` 带 `COLLATERAL ['RESULT1','RESULT2']`、`nav_dup` 带 `COLLATERAL ['RESULT5','RESULT6']`（后一条是计划 :651 预告的 Task 2 之后设计如此，不是缺陷）；`grid_one_col`、`sidebar_class_gone` 也各带一条 `COLLATERAL`（把 grid 改成单列会连带打红 RESULT1、去掉 `.sidebar` 类会连带打红 RESULT1 —— 都是断言承重的表现，目标项各自已变红）。
 **额外一档（`shell_check.py 1024`，本步未要求，是 Task 3 Step 4/5 要跑的口径）**：`RESULT4` 在这档 **FAIL `card-design(+186px)`**，其余与 1440 档同（7/8/9 红）。按本步「RESULT4 一旦红就回查」当场回查过：`minmax(0, 1fr)` 与 `min-width: 0` 两段都在文件里（Step 4 的锚点命中数各 1），**不是漏写护栏**；真实成因是 `.card-design-layout` 的 `@media (max-width: 900px) → 1fr`（`styles.css:1531-1532`）按视口判定 —— 1024 视口下它不触发，而容器只有 696（`1024-264-64`），三列 `180px 1fr 260px`（`:1528-1529` 那条 1100px 档）的中列被 `.cd-editor` 的 min-content 顶到 442px，`.workspace` `scrollWidth 946 > clientWidth 760`。这条正是 Task 3 Step 1 换算表里 `max-width: 900px → @container ws (max-width: 836px)` 要收的：容器 696 ≤ 836 会把它降成单列。改壳前同档同页 `RESULT4` 是 PASS（1024 视口下内容 960，三列装得下），所以这是改壳的**已知几何代价**、不是新 bug，且 Task 2 未动任何 `.card-design-*` 规则。
 
-- [x] **Step 6: 人工看一眼主窗口宽度**
+- [x] **Step 6a: 主窗口宽度的自动化几何复核（代 `npx serve`，1440/1024 两档）**
 
 Run: `cd "/f/Qoder/自媒体/自媒体工作台/workbench" && npx serve . -l 4173` → 浏览器开 `http://127.0.0.1:4173`，把窗口拖到 1024（Tauri `minWidth` 下限）。
 Expected: 侧栏 264 固定，右栏 760 起，无横向滚动条。
@@ -848,6 +848,10 @@ Expected: 侧栏 264 固定，右栏 760 起，无横向滚动条。
 - 1440x900：`sidebarW=264 sidebarX=0 sidebarPos=sticky wsX=264 wsW=1176 scrollWidth=1440 overflowX=0 hasScrollbarH=False display=grid`
 - 1024x768：`sidebarW=264 sidebarX=0 sidebarPos=sticky wsX=264 wsW=760 scrollWidth=1024 overflowX=0 hasScrollbarH=False display=grid`
 即「侧栏 264 固定、右栏 760 起、dashboard 无横向滚动条」在两档都成立。**但这不是人眼验收**：截图只证明了几何，`card-design` 页在 1024 档确有 186px 横向溢出（见 Step 5 那条），`dist/` 未同步（Task 5），**WebView2 / Tauri 没有任何自动化覆盖**，本步的人工看一眼仍挂着 —— 需要人在真窗口里过一遍（Task 6 Step 5 是它的正式档）。
+
+- [ ] **Step 6b: 人眼在真窗口验收（1024 下限 + WebView2/Tauri）**
+
+这一步**自动化一条都代替不了**，勾上它必须有人的签字：在真 Tauri/WebView2 窗口里把宽度压到 `minWidth: 1024`，看侧栏是否 264 固定、右栏是否 760 起、`card-design` 页是否有横向滚动条（Task 2 结束时它**会**有 186px 溢出，由 Task 3 的容器查询修掉，所以这一眼要在 Task 3 之后再看）。正式档期是 Task 6 Step 5；Task 2 的几何复核不能替它打勾，因为 Chromium 与 WebView2 的滚动条宽度、字体度量与合成器都不同，本计划的自动化从不声称覆盖后者。
 
 - [x] **Step 7: Agent 全链路没被改坏**
 
@@ -1023,6 +1027,8 @@ Expected: 两档都全部 9 条 PASS 且 `RESULT-OFFLINE: PASS`，末行 `RESULT
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py`
 Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。这一行现在**只有 `shell_check.py` 把话说完才会被打**（stdout 无 RESULT 判定行 / 无末行 `RESULT:` 汇总 / 退出码非 0-1 / 超过 `CHECK_TIMEOUT = 120s` 未退出 → 驱动直接中止并带上 returncode 与 stderr 摘录），改前它是「子进程一个字没输出」也会打印的假绿句子。但这句话能撑到的范围要说准：它证明的是**那次子进程跑到了底**（至少有 1 条 `RESULT<数字>` 判定行、有末行汇总、退出码 0/1、没超时），不是**9 条编号断言与离线行都齐**——条数由 `shell_check.py` 自己那本账管，驱动故意不数（钉两个 9 就成两处账，第一次不同步会表现为整轮中止而不是诚实报告）。所以 Step 3 的「9 条齐全」仍靠人看那份逐行输出核，`全绿` 只是排掉了「压根没量」这条路。
 （`sidebar_w_zero` 会让 RESULT1 与 RESULT2 同时变红：侧栏宽 0 → 工作区 x=0。这不影响判定，目标 RESULT1 红即算证明，但驱动会在它下面打一行 `COLLATERAL 相对基线新红 ['RESULT1', 'RESULT2']，目标只有 RESULT1` —— 那行现在是自动的，不用靠人盯 `实际` 列。`nav_dup` **不在**这一列里，且这是设计好的：Task 2 之后它的锚点在 `.sidebar` 内，复制一份会把 `navInSidebar` 推到 13，所以它这一行的预期输出是 `OK 变红` 下面紧跟 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6`——RESULT5 的共现红是**预期**、不是缺陷（RESULT5 由 `sidebar_class_gone` 负责证明，`nav_dup` 只是第二次压上它的计数半边）。单一断言被单一变异打红这件事，只有 `no_sticky`、`page_id_gone`、`ws_container_gone` 等几条成立。）
+
+**Task 2 实测补记（照此认账，别在 Task 4/6 重新发现一遍）**：那 8 条变异里还有两对共现——`grid_one_col` 打红 `['RESULT1', 'RESULT2']`、`sidebar_class_gone` 打红 `['RESULT1', 'RESULT5']`。成因与上面两条同类：锚点动的是 `.app-shell` 的列轨与 `.sidebar` 这个类本身，而 RESULT1 量的正是这两件事，所以 RESULT1 跟着红是结构必然，不是串撞错了对象。撞错对象长得不一样：那会是 `BAD 没变红`（目标没红、红的名字点不出因果）或 `INVALID`（目标在变异前就红）。Task 4 Step 3 跑全 11 条时，这四对 COLLATERAL 一起出现才是对的。
 
 
 - [ ] **Step 4: Commit**
