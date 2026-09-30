@@ -469,8 +469,8 @@ def locate(text, old, new):
 
     计数口径是**逻辑**的：同一处锚点写成 CRLF 或写成 LF 都算同一个锚点，所以混用 EOL 的文件里
     真出现两处（一处 CRLF 形状的、一处 LF 形状的）就如实报 2。改前只报「第一个匹配到的变体」的
-    count，于是报 1、ANCHOR 警告静默，而 replace(..., 1) 找的是它**没数过**的那一处
-    （str.replace 按位置扫描，与先试哪种拼法无关）——数到的和改掉的不是同一个东西。
+    count，于是报 1、ANCHOR 警告静默；而它替换的正是那个被数过的 CRLF 变体的第一处，另一处
+    （LF 形状的）原地不动——结果规则只删了一半，判定却看起来像数到几处就改了几处。
     现在数到几处就只能改那一处：hits != 1 一律不动手，0 处由 main 报 SKIP，多于 1 处报 ANCHOR
     并拒绝写盘。单行锚点的两种拼法是同一个串，只数一遍，不会翻倍。
     """
@@ -562,8 +562,9 @@ def main():
             bad += 1
             continue
         if mutated is None:
-            # 逻辑锚点命中不止一处：replace(..., 1) 改到哪一处没人保证，
-            # 这条「证明」可能打在别的对象上 → 一票否决，不写盘（改前只警告一声就照改）。
+            # 逻辑锚点命中不止一处：改前它只数「第一个匹配到的拼法」，两处会报成 1、警告静默，
+            # 而替换只落到那一处，另一处原地不动 → 规则只删一半，证明却看起来是完整的。
+            # 现在 hits != 1 一票否决，不写盘（改前只警告一声就照改）。
             print(f"{name}: ANCHOR 锚点在 {path.name} 里逻辑命中 {hits} 处"
                   f"（CRLF 与 LF 两种拼法分开数再相加，混用换行的文件也算）"
                   f" → 拒绝写盘，把锚点收窄到唯一一处再来")
@@ -629,7 +630,7 @@ narrow_no_degrade: SKIP —— 锚点不在 styles.css 中（前置任务没做�
 - **SKIP**：锚点串还没进文件（Task 2/3/4 没做到位）。这条同时是「计划里的 CSS 片段是否真被写进文件」的探针——漏写 `.modal` 容器块、漏写 `--sidebar-w`、Task 4 那段没落地，都会在这里以 SKIP 现形。
 - **BAD 没变红**： 锚点在、目标断言基线也是绿的，改完它却没红 —— 要么这条断言仍在空跑，要么变异串打到了别的对象。实测口径（在 `/f/tmp` 的驱动副本里把 `page_id_gone` 的 `want` 故意写成 RESULT4）：`page_id_gone: BAD 没变红  期望 RESULT4 红，实际 ['RESULT1', 'RESULT2', 'RESULT3', 'RESULT5', 'RESULT8']`，下面紧跟 `COLLATERAL 相对基线新红 ['RESULT3']，目标只有 RESULT4` —— 红是红了，红的不是要证的那条；这条同样计入「未被证明」。
 - **INVALID**：断言在变异**之前**就已经是红的，这次变异证明不了任何东西。这条预检是我第一版漏掉的，当时 `no_sticky` 打印了 `OK 变红` 而 RESULT1 其实一直红着——假证明比没有证明更糟。注意判定顺序：锚点检查在前，所以 `sidebar_w_zero`（目标 RESULT1 也红）报的是 SKIP 而不是 INVALID。
-- **ANCHOR**：锚点在目标文件里**逻辑命中** 多于 1 处。计数口径是逻辑锚点：同一处写成 CRLF 或写成 LF 都算同一条，两种拼法分开数再相加（单行锚点两种拼法是同一个串，只数一遍，不会翻倍）。改前只报「第一个匹配到的拼法」的 `count`，于是混用换行的文件里两处会报成 1、警告静默，而 `replace(old, new, 1)` 改的是两处中的某一处——数到的和改掉的不是同一个东西。现在多于 1 处**拒绝写盘**（改前只是警告一声照改），并计入「未被证明」，要做的把锚点收窄到唯一一处。实测（合成 fixture：同一三行锚点出现两处，一处 CRLF 形状一处 LF 形状）：改前驱动报 `hits=1`、真的写了盘、末行 `全部断言已被证明会变红` 且 **exit 0**（假通过的完整形态）；改后报 `hits=2` → `ANCHOR … 拒绝写盘` → `1 项未被证明` exit 1，fixture 字节原样、且 `hits == 1` 的正对照照旧 `OK 变红`。今天 11 条锚点的逻辑命中数是 0 或 1（`no_sticky`/`page_id_gone`/`nav_dup` 各 1，其余 0），所以这一条今天不触发，11 条判定与改前逐字相同。
+- **ANCHOR**：锚点在目标文件里**逻辑命中** 多于 1 处。计数口径是逻辑锚点：同一处写成 CRLF 或写成 LF 都算同一条，两种拼法分开数再相加（单行锚点两种拼法是同一个串，只数一遍，不会翻倍）。改前只报「第一个匹配到的拼法」的 `count`，于是混用换行的文件里两处会报成 1、警告静默，而替换只落到**被数过的那个拼法的第一处**，另一处（另一种拼法）原地不动——规则只删了一半，`hits` 看起来却自洽。现在多于 1 处**拒绝写盘**（改前只是警告一声照改），并计入「未被证明」，要做的把锚点收窄到唯一一处。实测（合成 fixture：同一三行锚点出现两处，一处 CRLF 形状一处 LF 形状）：改前驱动报 `hits=1`、真的写了盘、末行 `全部断言已被证明会变红` 且 **exit 0**（假通过的完整形态）；改后报 `hits=2` → `ANCHOR … 拒绝写盘` → `1 项未被证明` exit 1，fixture 字节原样、且 `hits == 1` 的正对照照旧 `OK 变红`。今天 11 条锚点的逻辑命中数是 0 或 1（`no_sticky`/`page_id_gone`/`nav_dup` 各 1，其余 0），所以这一条今天不触发，11 条判定与改前逐字相同。
 
 **每条断言都要有对应的变异**（第一版计划漏了 RESULT3/6/9 三条，等于默许它们空跑）：
 
@@ -646,7 +647,7 @@ narrow_no_degrade: SKIP —— 锚点不在 styles.css 中（前置任务没做�
 | 9 | 窄屏降级无溢出 | `narrow_no_degrade` | Task 4 后（此前 RESULT9 是红的，会报 INVALID） |
 
 `nav_dup` 尤其有用，但**功劳要记对断言，且要说清是哪一档**（实测口径，不是推测）。`RESULT5` 数 `.sidebar .nav-link`（`shell_check.py` 的 PROBE `navInSidebar`），`RESULT6` 数全站 `.nav-link.active`（`switchPage` 按 `app.js:391-403` 切），两条的口径差就落在「复制出来的那份导航在 `.sidebar` 里还是外面」：
-  - **今天（改壳前：导航在顶栏，`index.html:70`）**——复制出的那份在 `.sidebar` **之外**，`navInSidebar` 一个都不数（今天实测 0），所以这条变异只打红 **RESULT6**；上面 Step 4 的 `实际 ['RESULT1', 'RESULT2', 'RESULT5', 'RESULT6', 'RESULT8']` 里 RESULT5 是基线本来就红的那条，不是这次变异的红。同一档下「Task 2 忘删旧顶栏、留两份导航」真正当场咬住的也是 **RESULT6**（双高亮），RESULT5 仍绿。`shell_mutate.py` 表里 `nav_dup` 那句注释写的「侧栏计数变 13」讲的是**下一档**，不是今天。
+  - **今天（改壳前：导航在顶栏，`index.html:70`）**——复制出的那份在 `.sidebar` **之外**，`navInSidebar` 一个都不数（今天实测 0），所以这条变异只打红 **RESULT6**；上面 Step 4 的 `实际 ['RESULT1', 'RESULT2', 'RESULT5', 'RESULT6', 'RESULT8']` 里 RESULT5 是基线本来就红的那条，不是这次变异的红。同一档下「Task 2 忘删旧顶栏、留两份导航」真正当场咬住的也是 **RESULT6**（双高亮），RESULT5 仍绿。`shell_mutate.py` 表里 `nav_dup` 那句注释写的「同一处变异会连带把 navInSidebar 推到 13 → RESULT5 也红」讲的是**下一档**，不是今天。
   - **Task 2 之后（导航搬进 `.sidebar`）**——`nav_dup` 的锚点本身就在 `.sidebar` 内，复制一份把 `navInSidebar` 从 12 推到 **13** → RESULT5 **与** RESULT6 同时红，驱动在 `nav_dup` 下面打 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6`。**这是预期的共现，不是缺陷**：RESULT5 的证明人仍是 `sidebar_class_gone`，`nav_dup` 只是顺带第二次压上它的计数半边。而「忘删旧顶栏」在这档会让锚点命中 2 处 → 驱动按 `ANCHOR` 拒绝写盘（见下面的唯一性段），那时该修的是 Task 2 的删除，不是变异表。
 所以 RESULT5 防的是「侧栏内导航项数目不对」，RESULT6 防的是「任何地方多出高亮」。`app.js:371/391-403` 是本计划的冻结面，不能改代码来迁就这句话，是这句话原本记错了账。
 
@@ -943,7 +944,7 @@ Expected: 1024 档 `RESULT4` PASS。若 `card-design` 溢出，注意 `.cd-previ
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col ws_container_gone page_id_gone ws_min_width sidebar_class_gone nav_dup chat_vh_old modal_container`
 Expected: 10 行全部 `OK 变红`，exit 0。**故意不带 `narrow_no_degrade`**：此刻 RESULT9 还是红的（Task 4 没做），它会以 `INVALID` 报出来——那不是失败，是时序。
-任一行 `BAD 没变红`、`SKIP` 或 `ANCHOR` 就是计划本身有问题（锚点不唯一 = 该删的没删干净），停下报告，不要继续。
+任一行 `BAD 没变红`、`SKIP` 或 `ANCHOR` 就是计划本身有问题（`ANCHOR` 有两种成因，别一律当成「该删的没删干净」：`nav_dup` 那类是旧顶栏没删净留下两份导航，`no_sticky` 那类是 Task 2 该**接手**的 `position: sticky;` 被写了第二处而旧处没删——两种都要回到 Task 2 的删除/新增那一步去收窄锚点），停下报告，不要继续。
 （`SKIP` 的意思是锚点串在文件里找不到 —— 例如把 `.modal` 那条容器块漏写了，此时断言根本没东西可测，继续下去就是自欺。逐行核对缩进的 `证据` 与 `COLLATERAL`：目标那条的判定值要肉眼可读（`grid_one_col` 之后 RESULT2 应显示 `containerName` 仍然对得上、`x` 不等于 264；`ws_container_gone` 之后应显示 `containerName=none`），除目标外多出的红项要在 `COLLATERAL` 里点得名，说不清就怀疑变异串撞到了别处。到这一步 `nav_dup` 的锚点已经在 `.sidebar` 内，它会连带把 RESULT5 打红（`navInSidebar` 12→13），所以它下面那行 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6` 是**预期**的（Task 4 Step 3 同）；RESULT5 自己的证明仍是 `sidebar_class_gone` 那一行。还有：如果基线那一次 `shell_check.py` 没把话说完（无 RESULT 判定行 / 无末行汇总 / 退出码非 0-1 / 超过 120s 没退出），驱动会在打印 `变异前基线红项` 之前就中止，一条变异都不写盘——那时先修 harness 或查环境，别去怀疑断言。）
 
 - [ ] **Step 7: 视觉回归 + Agent 回归**
@@ -1005,7 +1006,7 @@ Expected: 两档都全部 9 条 PASS 且 `RESULT-OFFLINE: PASS`，末行 `RESULT
 - [ ] **Step 3: 跑全量变异，把 9 条断言（11 个变异）一次证明干净**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py`
-Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。这一行现在**只有 `shell_check.py` 把话说完才会被打**（stdout 无 RESULT 判定行 / 无末行 `RESULT:` 汇总 / 退出码非 0-1 / 超过 `CHECK_TIMEOUT = 120s` 未退出 → 驱动直接中止并带上 returncode 与 stderr 摘录），所以看到 `变异前基线红项：全绿` 就意味着那 9 条 + 离线行确实量过一遍；改前它是「子进程一个字没输出」也会打印的假绿句子。
+Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。这一行现在**只有 `shell_check.py` 把话说完才会被打**（stdout 无 RESULT 判定行 / 无末行 `RESULT:` 汇总 / 退出码非 0-1 / 超过 `CHECK_TIMEOUT = 120s` 未退出 → 驱动直接中止并带上 returncode 与 stderr 摘录），改前它是「子进程一个字没输出」也会打印的假绿句子。但这句话能撑到的范围要说准：它证明的是**那次子进程跑到了底**（至少有 1 条 `RESULT<数字>` 判定行、有末行汇总、退出码 0/1、没超时），不是**9 条编号断言与离线行都齐**——条数由 `shell_check.py` 自己那本账管，驱动故意不数（钉两个 9 就成两处账，第一次不同步会表现为整轮中止而不是诚实报告）。所以 Step 3 的「9 条齐全」仍靠人看那份逐行输出核，`全绿` 只是排掉了「压根没量」这条路。
 （`sidebar_w_zero` 会让 RESULT1 与 RESULT2 同时变红：侧栏宽 0 → 工作区 x=0。这不影响判定，目标 RESULT1 红即算证明，但驱动会在它下面打一行 `COLLATERAL 相对基线新红 ['RESULT1', 'RESULT2']，目标只有 RESULT1` —— 那行现在是自动的，不用靠人盯 `实际` 列。`nav_dup` **不在**这一列里，且这是设计好的：Task 2 之后它的锚点在 `.sidebar` 内，复制一份会把 `navInSidebar` 推到 13，所以它这一行的预期输出是 `OK 变红` 下面紧跟 `COLLATERAL 相对基线新红 ['RESULT5', 'RESULT6']，目标只有 RESULT6`——RESULT5 的共现红是**预期**、不是缺陷（RESULT5 由 `sidebar_class_gone` 负责证明，`nav_dup` 只是第二次压上它的计数半边）。单一断言被单一变异打红这件事，只有 `no_sticky`、`page_id_gone`、`ws_container_gone` 等几条成立。）
 
 
