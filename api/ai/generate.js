@@ -5,12 +5,31 @@
  * 环境变量优先级：DEEPSEEK_*（兼容旧版） → ZHIPU_* → MOONSHOT_*
  */
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Api-Key",
-  "Access-Control-Max-Age": "86400",
-};
+function getCorsHeaders() {
+  // 生产环境建议设置 ALLOWED_ORIGIN 收窄来源；未设置时回退为 *
+  const origin = process.env.ALLOWED_ORIGIN || "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Api-Key",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+
+// ---- 简易按 IP 限流（固定窗口，默认 120 次/分钟；RATE_LIMIT_DISABLED=1 关闭）----
+const _rateBuckets = new Map();
+function rateLimited(ip) {
+  if (process.env.RATE_LIMIT_DISABLED === "1") return false;
+  const limit = parseInt(process.env.RATE_LIMIT_PER_MIN || "120", 10);
+  const now = Date.now();
+  const b = _rateBuckets.get(ip);
+  if (!b || now > b.resetAt) {
+    _rateBuckets.set(ip, { count: 1, resetAt: now + 60000 });
+    return false;
+  }
+  b.count += 1;
+  return b.count > limit;
+}
 
 /**
  * 共享密钥鉴权
@@ -131,7 +150,7 @@ function getProviders() {
 function sendJson(res, body, status) {
   res.statusCode = status || 200;
   res.setHeader("Content-Type", "application/json");
-  for (const [k, v] of Object.entries(CORS_HEADERS)) {
+  for (const [k, v] of Object.entries(getCorsHeaders())) {
     res.setHeader(k, v);
   }
   res.end(JSON.stringify(body));
@@ -180,7 +199,7 @@ module.exports = async (req, res) => {
   // CORS 预检
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
-    for (const [k, v] of Object.entries(CORS_HEADERS)) {
+    for (const [k, v] of Object.entries(getCorsHeaders())) {
       res.setHeader(k, v);
     }
     res.end();
@@ -195,6 +214,14 @@ module.exports = async (req, res) => {
   const auth = authorize(req);
   if (!auth.ok) {
     return sendJson(res, { error: auth.message }, auth.code);
+  }
+
+  const clientIp =
+    (req.headers["x-forwarded-for"] && req.headers["x-forwarded-for"].split(",")[0].trim()) ||
+    req.socket.remoteAddress ||
+    "unknown";
+  if (rateLimited(clientIp)) {
+    return sendJson(res, { error: "请求过于频繁，请稍后再试" }, 429);
   }
 
   // 解析请求体

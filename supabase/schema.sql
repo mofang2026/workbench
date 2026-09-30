@@ -363,6 +363,17 @@ create trigger trg_video_scripts_updated
   before update on public.video_scripts
   for each row execute function public.touch_updated_at();
 
+-- contents 表 AI 违规自检报告字段
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'contents' and column_name = 'compliance_report'
+  ) then
+    alter table public.contents add column compliance_report jsonb;
+  end if;
+end $$;
+
 -- ============================================================================
 -- 平台扩展迁移：新增 视频号(shipinhao)/快手(kuaishou)/微博(weibo)/今日头条(toutiao)
 -- 动态删除旧的 platform CHECK 约束并重建为含新平台的版本（自包含，可重复执行）
