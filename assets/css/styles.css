@@ -47,6 +47,11 @@
   --sidebar-w: 264px;
   --ws-pad-t: 28px;
   --ws-pad-b: 80px;
+  /* 顶部导航占掉的竖向空间。桌面侧栏在工作区左边，不占竖向，所以是 0；窄屏降级后它叠到工作区
+     上方，由降级段改成实测值。.chat-wrap 的高度算式统一减掉它，于是「侧栏在哪」这件事只由
+     这一个 token 表达，不需要为窄屏另写一条高度规则（降级段在文件前部、.chat-wrap 在后部，
+     同特异度按源序后者会赢，写在那里是死的）。 */
+  --nav-h: 0px;
 
   /* 圆角 */
   --radius-sm: 10px;
@@ -224,7 +229,17 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   .sidebar .nav-link { padding: 8px 14px; white-space: nowrap; }
   .sidebar .nav-link.active::before { display: none; }
   .sidebar-foot { margin-top: 0; padding-top: 0; border-top: 0; }
-  .workspace { padding: 20px 16px 60px; }
+  /* 三个 token 一起改：字面 padding 与 token 不同步正是这次 chat 溢出的半个根因（token 停在
+     28/80，chat 高度算式读的是 token）。111 是 .sidebar 降级后的实测高度，2026-10-01 量于
+     W280..W760 十个宽度、恒为 111（导航横滑单行不换行）；改 .sidebar 的 padding 12px 16px、
+     gap 10px 或 .nav-link 的 padding 8px 14px 任一处都要重量，别照抄这个数。
+     盯着它的是 RESULT10。 */
+  .workspace {
+    --nav-h: 111px;
+    --ws-pad-t: 20px;
+    --ws-pad-b: 60px;
+    padding: var(--ws-pad-t) 16px var(--ws-pad-b);
+  }
 }
 
 /* ── 卡片 ── */
@@ -2054,7 +2069,7 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .chat-wrap {
   display: flex;
   gap: 14px;
-  height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b));
+  height: calc(100vh - var(--nav-h) - var(--ws-pad-t) - var(--ws-pad-b));
   min-height: 520px;
 }
 .chat-rail {
