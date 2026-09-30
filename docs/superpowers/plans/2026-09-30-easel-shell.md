@@ -40,7 +40,7 @@
 另外两条实测缺陷，属于本计划顺手要修的：
 
 - `dist/` 已陈旧：`comm` 比对显示 `dist/assets/js` 缺 `agent.js`、`chat.js`、`platforms.js`，`dist/index.html` 只有 22 个 `<script src>`（源站 25 个）。`npm run tauri:build` 会自动 sync（`package.json` scripts），但**手动跑 `tauri build` 会打出没有助手页的桌面包** → Task 5 收口。
-- `.editor-layout` 在模态里挤成两列（既有 bug，与壳无关）：`.modal` 是 `width:100%; max-width:640px`（`styles.css:620-622`），而它内部的 `.editor-layout`（`:659`）靠 `@media (max-width: 980px)` 才降单列（`:664`）——尺子是视口，可它量的是 640px 的模态。Playwright 实测 1440 与 1024 两档视口下模态内 `gridTemplateColumns` 都是 **2 条轨**（`RESULT8` 的 detail：`{'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'tracks': 2, ...}`）。Task 3 换容器查询后自动修正，并已写成断言锁住。
+- `.editor-layout` 在模态里挤成两列（既有 bug，与壳无关）：`.modal` 是 `width:100%; max-width:640px`（`styles.css:620-622`），而它内部的 `.editor-layout`（`:659`）靠 `@media (max-width: 980px)` 才降单列（`:664`）——尺子是视口，可它量的是 640px 的模态。Playwright 实测 1440 与 1024 两档视口下模态内 `gridTemplateColumns` 都是 **2 条轨**（`RESULT8` 的 detail：`{'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'display': 'grid', 'tracks': 2, ...}`）。顺带把 RESULT8 的空跑面堵掉：非 grid 元素上 Blink 把 `gridTemplateColumns` 序列化成 `none`，`split(/\s+/).length` 数出来恰好是 1，所以旧口径的「编辑器单列」对任何**没声明轨道的非 grid** 都恒真 —— 实测把 `.editor-layout` 改成 `display: block` 并摘掉它的 `grid-template-columns`，旧口径打 `RESULT8: PASS`（`'display': 'block', 'tracks': 1`），新口径必须同时要求 `display == "grid"` 与 `tracks == 1` 才红。Task 3 换容器查询后自动修正，并已写成断言锁住。
 - 顺带把容器化的一条真实风险量掉了：`container-type` 会让该元素成为其 **fixed 后代的包含块**（本来 fixed 是相对视口定位的）。实测全项目 `position: fixed` 只有 4 处：`body::before`（`styles.css:80-82`，body 的伪元素）、`.auth-mask`（`:419-420`，对应 `index.html:18` 的 `#authMask`）、`.modal-mask`（`:609-611`，由 `showModal()` 挂到 `document.body`，实测 `parent === "BODY"`）、以及 `#toast` 的内联样式（`index.html:230`）。**四者都是 body 级节点，没有一个 `.workspace` 或 `.modal` 的后代是 fixed 定位**，所以给这两处加 `container-type` 不会把任何遮罩/Toast 钉错位置。RESULT8 就是这条的守门断言（它同时校验 `parent === "BODY"` 与遮罩铺满整视口，`maskW==vw && maskH==vh`）。
 
 ---
@@ -49,8 +49,8 @@
 
 | 路径 | 动作 | 职责 |
 |---|---|---|
-| `F:\Qoder\自媒体\.verify-shell\shell_check.py` | 新建（仓库外，避免被 `sync-dist.js` 打进桌面包） | shell 几何回归：**9 条** RESULT 断言，全程离线 |
-| `F:\Qoder\自媒体\.verify-shell\shell_mutate.py` | 新建 | 把 shell_check 的每条断言逐个改红，证明非空跑；带「变异前基线红项」预检 |
+| `F:\Qoder\自媒体\.verify-shell\shell_check.py` | 新建（仓库外，避免被 `sync-dist.js` 打进桌面包） | shell 几何回归：**9 条**编号 RESULT 断言 + 1 条 `RESULT-OFFLINE`（外部请求尝试/拦截/漏网三计数），全程离线 |
+| `F:\Qoder\自媒体\.verify-shell\shell_mutate.py` | 新建 | 把 shell_check 的每条断言逐个改红（**11** 个变异），证明非空跑；带「变异前基线红项」预检 + 离线预检（`RESULT-OFFLINE` 红则整轮作废）、完整 FAIL 行证据与 `COLLATERAL` 共现点名，按字节读写还原 |
 | `F:\Qoder\自媒体\.verify-shell\cors_check.py` | 新建（Task 5） | 三家 provider 的浏览器 preflight 复检，线上直连可行性的可复跑证据；无需 Key |
 | `workbench/index.html` | 改 `62-88`（顶部导航 → 侧栏 + 工作区开标签）、`227`（`.app-shell` 闭标签前补 `</main>` 闭合） | DOM 骨架 |
 | `workbench/assets/css/styles.css` | 删 `100-111`、`147-151`、`223-224`；改 `154-158`；`:root` 增 3 个 token；新增 `.sidebar/.workspace` 段；15 条 `@media` → `@container` | 布局本体，唯一的行为变更面 |
@@ -123,25 +123,28 @@ Expected: 末行 `RESULT: FAIL(4/9)`，且红的正好是 `RESULT1/RESULT2/RESUL
 
 **Interfaces:**
 - Consumes: `window.switchPage(name)`（`app.js:417` 导出，实测 `typeof === "function"`）、`window.showModal/closeModal`（utils 镜像到全局，实测均为 function）
-- Produces: `shell_check.py` 退出码（0 = 全绿）与 stdout 上的 `RESULT<n>: PASS/FAIL` 行；Task 2/3/4 的每一步都跑它
+- Produces: `shell_check.py` 退出码（0 = 全绿，且要求 `RESULT-OFFLINE` 也绿）与 stdout 上的 `RESULT1..RESULT9: PASS/FAIL` 行（按编号顺序打印）+ 一条非编号的 `RESULT-OFFLINE: PASS/FAIL`；Task 2/3/4 的每一步都跑它
 
-- [ ] **Step 1: 写 harness**
+- [x] **Step 1: 写 harness**
 
 `F:\Qoder\自媒体\.verify-shell\shell_check.py`：
 
 ```python
-"""工作台 shell 几何回归：逐页量布局，全程离线（外部请求一律 abort）。"""
+"""工作台 shell 几何回归：逐页量布局，全程离线（外部请求一律 abort，并把离线本身量成一条断言）。"""
 import functools
 import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
 WORKBENCH = Path(r"F:\Qoder\自媒体\自媒体工作台\workbench")
 PORT = 4174
 URL = f"http://127.0.0.1:{PORT}/index.html"
+# 主机名精确比对的口径。不能用 `"127.0.0.1" in url`：那会放行 http://127.0.0.1.attacked.invalid/
+LOCAL_HOST = "127.0.0.1"
 SIDEBAR_W = 264
 # 桌面巡检宽度可用第一个参数覆盖：1024 是 Tauri minWidth，改壳的真实代价要在这一档量
 DESK_W = int(sys.argv[1]) if len(sys.argv) > 1 else 1440
@@ -210,24 +213,70 @@ PROBE = """() => {
   };
 }"""
 
+# display 必须一起量：非 grid 元素上 Blink 把 gridTemplateColumns 序列化成 "none"，
+# 只数 tracks 的话「编辑器单列」对任何非 grid 都恒真（none 切成 1 段）——空跑断言。
 MODAL = """() => {
   showModal('<div class="editor-layout"><div style="height:40px">a</div><div>b</div></div>');
   const mask = document.querySelector(".modal-mask"), el = document.querySelector(".editor-layout");
   const b = mask.getBoundingClientRect();
   const out = { parent: mask.parentElement.tagName,
     maskW: Math.round(b.width), maskH: Math.round(b.height),
+    display: getComputedStyle(el).display,
     tracks: getComputedStyle(el).gridTemplateColumns.trim().split(/\\s+/).length,
     vw: window.innerWidth, vh: window.innerHeight };
   closeModal();
   return out;
 }"""
 
+# 离线约束的三个计数：真有过外部请求（否则 abort 规则是在空跑）、全部由本 harness abort 掉
+# （规则确实经手了这些请求）、零个拿到响应（漏网）。删掉 ctx.route 那行现在会改输出、改 exit。
+ext_tried, ext_blocked, ext_leaked = [], [], []
+
+
+def is_external(url):
+    """http(s) 且主机名 != 127.0.0.1；data:/blob: 不是网络请求，不算外部。"""
+    if not url.startswith(("http://", "https://")):
+        return False
+    try:
+        return urlparse(url).hostname != LOCAL_HOST
+    except ValueError:
+        return True
+
+
+def route_local_first(req):
+    if is_external(req.request.url):
+        ext_blocked.append(req.request.url)
+        req.abort()
+    else:
+        req.continue_()
+
+
 RESULTS = []
+# 测量顺序天然是 1,2,5,3,4,6,7,8,9（侧栏/工作区/计数在桌面首测，3/4/6 要逛完 12 页），
+# 打印必须按编号 1..9，否则计划里的表与实跑输出对不上。
+LINES = {}
 
 
 def check(name, ok, detail=""):
-    print(f"RESULT{name.split()[0]}: {'PASS' if ok else 'FAIL'}  {name}  {detail}")
+    n = int(name.split()[0])
+    LINES[n] = f"RESULT{n}: {'PASS' if ok else 'FAIL'}  {name}  {detail}"
     RESULTS.append(bool(ok))
+
+
+def emit():
+    for n in sorted(LINES):
+        print(LINES[n])
+
+
+def offline_check():
+    ok = bool(ext_tried) and not ext_leaked and len(ext_blocked) == len(ext_tried)
+    if ok:
+        print(f"RESULT-OFFLINE: PASS  {len(ext_blocked)} 次外部请求被拦截，成功 {len(ext_leaked)}")
+    else:
+        hosts = sorted({str(urlparse(u).hostname) for u in ext_tried})
+        print(f"RESULT-OFFLINE: FAIL  尝试 {len(ext_tried)} 拦截 {len(ext_blocked)} "
+              f"拿到响应 {len(ext_leaked)} 主机={hosts} 泄漏={ext_leaked[:2]}")
+    return ok
 
 
 class Quiet(SimpleHTTPRequestHandler):
@@ -245,76 +294,87 @@ def serve():
 def main():
     print(f"# 桌面巡检宽度 = {DESK_W}")
     srv = serve()
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        ctx = browser.new_context(viewport={"width": 1440, "height": 900})
-        ctx.add_init_script(STUB_SUPABASE)
-        ctx.route("**/*", lambda r: r.continue_() if "127.0.0.1" in r.request.url else r.abort())
-        pg = ctx.new_page()
-        errs = []
-        pg.on("pageerror", lambda e: errs.append(str(e)))
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            ctx = browser.new_context(viewport={"width": 1440, "height": 900})
+            ctx.add_init_script(STUB_SUPABASE)
+            ctx.route("**/*", route_local_first)
+            pg = ctx.new_page()
+            errs = []
+            pg.on("pageerror", lambda e: errs.append(str(e)))
+            pg.on("request", lambda q: ext_tried.append(q.url) if is_external(q.url) else None)
+            pg.on("response", lambda s: ext_leaked.append(f"{s.url}({s.status})") if is_external(s.url) else None)
 
-        def browse(w, h):
-            errs.clear()
-            pg.set_viewport_size({"width": w, "height": h})
-            pg.goto(URL, wait_until="load")
-            pg.evaluate(FAKE_DB)
+            def browse(w, h):
+                errs.clear()
+                pg.set_viewport_size({"width": w, "height": h})
+                pg.goto(URL, wait_until="load")
+                pg.evaluate(FAKE_DB)
 
-        # ---- 桌面 ----
-        browse(DESK_W, 900)
-        pg.evaluate("() => window.switchPage('dashboard')")
-        d = pg.evaluate(PROBE)
-        check("1 侧栏 264 且吸顶", bool(d["sidebar"]) and d["sidebar"]["w"] == SIDEBAR_W
-              and d["sidebar"]["x"] == 0 and d["sidebarPos"] == "sticky", str(d["sidebar"]))
-        check("2 工作区在侧栏右侧", bool(d["workspace"]) and d["workspace"]["x"] == SIDEBAR_W,
-              str(d["workspace"]))
-        check("5 侧栏含 12 个导航项", d["navInSidebar"] == len(PAGES), f"实际 {d['navInSidebar']}")
+            # ---- 桌面 ----
+            browse(DESK_W, 900)
+            pg.evaluate("() => window.switchPage('dashboard')")
+            d = pg.evaluate(PROBE)
+            check("1 侧栏 264 且吸顶", bool(d["sidebar"]) and d["sidebar"]["w"] == SIDEBAR_W
+                  and d["sidebar"]["x"] == 0 and d["sidebarPos"] == "sticky", str(d["sidebar"]))
+            check("2 工作区在侧栏右侧且是 ws 容器", bool(d["workspace"])
+                  and d["workspace"]["x"] == SIDEBAR_W and d["wsContainer"] == "ws",
+                  f"{d['workspace']} containerName={d['wsContainer']}")
+            check("5 侧栏含 12 个导航项", d["navInSidebar"] == len(PAGES), f"实际 {d['navInSidebar']}")
 
-        bad_render, bad_overflow, bad_active = [], [], []
-        for name in PAGES:
-            pg.evaluate("n => window.switchPage(n)", name)
-            s = pg.evaluate(PROBE)
-            if s["pageKids"] < 1:
-                bad_render.append(f"{name}({s['pageKids']})")
-            if s["overflowX"] > 0:
-                bad_overflow.append(f"{name}(+{s['overflowX']}px)")
-            if s["active"] != [name]:
-                bad_active.append(f"{name}({','.join(s['active']) or '无'})")
-        check("3 12 页均有内容且无未捕获异常", not bad_render and not errs,
-              f"空页={bad_render} JS错误={errs[:2]}")
-        check("4 12 页均无横向溢出", not bad_overflow, str(bad_overflow))
-        check("6 单高亮且随页切换", not bad_active, str(bad_active))
+            bad_render, bad_overflow, bad_active = [], [], []
+            for name in PAGES:
+                pg.evaluate("n => window.switchPage(n)", name)
+                s = pg.evaluate(PROBE)
+                if s["pageKids"] < 1:
+                    bad_render.append(f"{name}({s['pageKids']})")
+                if s["overflowX"] > 0:
+                    bad_overflow.append(f"{name}(+{s['overflowX']}px)")
+                if s["active"] != [name]:
+                    # Task 2 手写侧栏时漏一个 data-page 就会这里是 undefined，join 直接 TypeError
+                    # 并把后面 4 条 RESULT 一起截断
+                    bad_active.append(f"{name}({','.join([str(x) for x in s['active']]) or '无'})")
+            check("3 12 页均有内容且无未捕获异常", not bad_render and not errs,
+                  f"空页={bad_render} JS错误={errs[:2]}")
+            check("4 12 页均无横向溢出", not bad_overflow, str(bad_overflow))
+            check("6 单高亮且随页切换", not bad_active, str(bad_active))
 
-        pg.evaluate("() => window.switchPage('chat')")
-        c = pg.evaluate(PROBE)
-        want = c["vh"] - 80
-        check("7 chat 工作区填满可用高度", c["chatBottom"] is not None
-              and want - 6 <= c["chatBottom"] <= c["vh"] + 1,
-              f"chatBottom={c['chatBottom']} 期望≥{want - 6} vh={c['vh']}")
+            pg.evaluate("() => window.switchPage('chat')")
+            c = pg.evaluate(PROBE)
+            want = c["vh"] - 80
+            check("7 chat 工作区填满可用高度", c["chatBottom"] is not None
+                  and want - 6 <= c["chatBottom"] <= c["vh"] + 1,
+                  f"chatBottom={c['chatBottom']} 期望≥{want - 6} vh={c['vh']}")
 
-        m = pg.evaluate(MODAL)
-        check("8 模态覆盖整视口 + 编辑器单列", m["parent"] == "BODY"
-              and m["maskW"] == m["vw"] and m["maskH"] == m["vh"] and m["tracks"] == 1, str(m))
+            m = pg.evaluate(MODAL)
+            check("8 模态覆盖整视口 + 编辑器是单列 grid", m["parent"] == "BODY"
+                  and m["maskW"] == m["vw"] and m["maskH"] == m["vh"]
+                  and m["display"] == "grid" and m["tracks"] == 1, str(m))
 
-        # ---- 窄屏 390 ----
-        browse(390, 780)
-        pg.evaluate("() => window.switchPage('dashboard')")
-        n = pg.evaluate(PROBE)
-        check("9 窄屏无横向溢出（侧栏降级）", n["display"] == "block" and n["overflowX"] <= 0
-              and n["pageKids"] >= 1 and not errs,
-              f"display={n['display']} overflowX={n['overflowX']} 错误={errs[:2]}")
+            # ---- 窄屏 390 ----
+            browse(390, 780)
+            pg.evaluate("() => window.switchPage('dashboard')")
+            n = pg.evaluate(PROBE)
+            check("9 窄屏无横向溢出（侧栏降级）", n["display"] == "block" and n["overflowX"] <= 0
+                  and n["pageKids"] >= 1 and not errs,
+                  f"display={n['display']} overflowX={n['overflowX']} 错误={errs[:2]}")
 
-        browser.close()
-    srv.shutdown()
-    print("\nRESULT: " + ("PASS" if all(RESULTS) else f"FAIL({RESULTS.count(False)}/{len(RESULTS)})"))
-    return 0 if all(RESULTS) else 1
+            browser.close()
+    finally:
+        emit()
+        srv.shutdown()
+    offline_ok = offline_check()
+    ok = all(RESULTS) and offline_ok
+    print("\nRESULT: " + ("PASS" if ok else f"FAIL({RESULTS.count(False)}/{len(RESULTS)})"))
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 2: 跑一遍，确认它现在会红（已实测，输出如下逐字为准）**
+- [x] **Step 2: 跑一遍，确认它现在会红（已实测，输出如下逐字为准）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 实测（2026-09-30，改壳前的现状，exit=1）：
@@ -322,28 +382,30 @@ Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/�
 ```
 # 桌面巡检宽度 = 1440
 RESULT1: FAIL  1 侧栏 264 且吸顶  None
-RESULT2: FAIL  2 工作区在侧栏右侧  None
-RESULT5: FAIL  5 侧栏含 12 个导航项  实际 0
+RESULT2: FAIL  2 工作区在侧栏右侧且是 ws 容器  None containerName=None
 RESULT3: PASS  3 12 页均有内容且无未捕获异常  空页=[] JS错误=[]
 RESULT4: PASS  4 12 页均无横向溢出  []
+RESULT5: FAIL  5 侧栏含 12 个导航项  实际 0
 RESULT6: PASS  6 单高亮且随页切换  []
 RESULT7: PASS  7 chat 工作区填满可用高度  chatBottom=825 期望≥814 vh=900
-RESULT8: FAIL  8 模态覆盖整视口 + 编辑器单列  {'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'tracks': 2, 'vw': 1440, 'vh': 900}
+RESULT8: FAIL  8 模态覆盖整视口 + 编辑器是单列 grid  {'parent': 'BODY', 'maskW': 1440, 'maskH': 900, 'display': 'grid', 'tracks': 2, 'vw': 1440, 'vh': 900}
 RESULT9: PASS  9 窄屏无横向溢出（侧栏降级）  display=block overflowX=0 错误=[]
+RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0
 
 RESULT: FAIL(4/9)
 ```
 
-红：`RESULT1/2/5`（还没有侧栏与工作区）、`RESULT8`（`tracks: 2` 就是那条与壳无关的既有 bug：640px 模态里的 `.editor-layout` 被 980px 视口断点判成两列）。
-`shell_check.py 1024`（Tauri `minWidth` 那一档）同跑实测：红绿集合与 exit 码与 1440 完全一致，只是 `RESULT8` 的 `maskW/vw` 由 1440 变 1024（`tracks: 2` 照旧），末行仍是 `RESULT: FAIL(4/9)`。
+红：`RESULT1/2/5`（还没有侧栏与工作区；`RESULT2` 现在还多量一条 `.workspace` 的 `container-name: ws`，detail 里的 `containerName=None` 就是它）、`RESULT8`（`tracks: 2` 就是那条与壳无关的既有 bug：640px 模态里的 `.editor-layout` 被 980px 视口断点判成两列；detail 里现在同时给 `display` 与 `tracks`）。
+`shell_check.py 1024`（Tauri `minWidth` 那一档）同跑实测：红绿集合与 exit 码与 1440 完全一致，只是 `RESULT8` 的 `maskW/vw` 由 1440 变 1024（`display: 'grid'`、`tracks: 2` 照旧），末行仍是 `RESULT: FAIL(4/9)`。
 绿：`RESULT3/4/6`（守恒断言，改壳后必须仍绿）、`RESULT7`（`chatBottom=825` 来自今天 `100vh - 168px` 这个恰好还凑合的常量）、`RESULT9`（今天 `.app-shell` 无 `display` 声明 → 窄屏本来就是 block）。
+离线断言（非编号行，实跑两档都是这一句）：`RESULT-OFFLINE: PASS  8 次外部请求被拦截，成功 0` —— 两档各 2 次页面加载共 8 个外部请求（`cdn.jsdelivr.net` 的 supabase、`fonts.googleapis.com`/`fonts.gstatic.com` 的字体），全部被本 harness abort、零个拿到响应。它要求「确有外部请求被尝试」且「拦截数 == 尝试数」且「成功数 == 0」，所以把 `ctx.route` 那行摘掉（实测：尝试 43 拦截 0 拿到响应 38）或让请求漏网，这一行立刻变红、exit 非 0，`shell_mutate.py` 也会在基线就中止整轮。
 
 两条踩过的坑，重跑时别踩：
 - **必须留 `STUB_SUPABASE` 这段 init script**。`ctx.route` 掐外部请求会连 Supabase 的 CDN 全局一起掐掉，`WorkbenchConfig` 初始化就抛 `createClient is not a function`，随后是 `auth.getUser is not a function` —— 那时 RESULT3 量到的是 harness 自己的问题，不是页面的。缺哪个 auth 方法就照报错补哪个 stub。
 - **必须用 `get-then-patch` 打桩**（`WB.get("Db").list = async () => []`），不要整块替换 `WB._registry["Db"].instance`：后者会抹掉别的方法，实测会让 dashboard 渲染走进异常分支。
 - playwright 只装在 Easel venv，系统 `python` 会 `ModuleNotFoundError`（已实测）；`python3` 在本机静默失败（exit 49），用 `python`。
 
-- [ ] **Step 3: 写变异驱动脚本**
+- [x] **Step 3: 写变异驱动脚本**
 
 `F:\Qoder\自媒体\.verify-shell\shell_mutate.py`：
 
@@ -361,11 +423,16 @@ PY = r"F:\Qoder\自媒体\Easel\.venv\Scripts\python.exe"
 # 名字 -> (目标文件, 原文, 替换, 期望变红的 RESULT 编号)
 # 锚点必须全文件唯一：`min-width: 0;` 在 styles.css 里已有 4 处（1171/1638/1725/1800），
 # 单独拿它当锚点会命中 `.rec-body` 而不是 `.workspace`，变异就白做了。
+# 锚点按 LF 写；落盘文件是 CRLF 时由 locate() 换算，见那里。
 MUT = {
     "sidebar_w_zero": (CSS, "--sidebar-w: 264px;", "--sidebar-w: 0px;", "RESULT1"),
     "no_sticky": (CSS, "position: sticky;", "position: static;", "RESULT1"),
     "grid_one_col": (CSS, "grid-template-columns: var(--sidebar-w) minmax(0, 1fr);",
                      "grid-template-columns: 1fr;", "RESULT2"),
+    # Task 2 的 `.workspace` 容器声明：Task 3 那 15 条 @container 全靠 container-name: ws，
+    # 摘掉它 RESULT2 的 containerName 半边就要红（锚点带上 `.workspace {` 才与 .modal 那块区分开）
+    "ws_container_gone": (CSS, ".workspace {\n  container-type: inline-size;\n  container-name: ws;",
+                          ".workspace {", "RESULT2"),
     "page_id_gone": (HTML, '<section id="page-rules"', '<section id="pagex-rules"', "RESULT3"),
     "ws_min_width": (CSS, "box-sizing: border-box;\n  min-width: 0;",
                      "box-sizing: border-box;\n  min-width: 1200px;", "RESULT4"),
@@ -383,23 +450,49 @@ MUT = {
 }
 
 
+def locate(text, old, new):
+    """按目标文件自己的换行风格匹配锚点，返回 (替换后的文本, 命中次数)；没命中返回 (None, 0)。
+
+    表里的锚点写 `\\n`，而 styles.css/index.html 目前是 CRLF：整串按 bytes 读写（见 main）
+    才能真「按字节还原」，代价就是多行锚点必须先对齐文件的 EOL。两种风格都试一遍，
+    将来被只会写 LF 的工具改过的那一段也能命中；全都不命中就报 SKIP。
+    """
+    for nl in ("\r\n", "\n"):
+        o = old.replace("\n", nl)
+        if o in text:
+            return text.replace(o, new.replace("\n", nl), 1), text.count(o)
+    return None, 0
+
+
 def run():
+    """跑一次 harness，返回 {RESULT 编号: 完整 FAIL 行（含判定值）}。
+
+    只认 RESULT<数字>：末行汇总 "RESULT: FAIL(4/9)" 不是断言，混进来会污染基线红项。
+    RESULT-OFFLINE 红 = 页面漏到了公网，此后任何「变红」都可能是网络抖动，证据作废 → 立刻收摊。
+    """
     r = subprocess.run([PY, "shell_check.py"], capture_output=True, text=True,
                        encoding="utf-8", errors="replace", cwd=str(Path(__file__).parent))
-    # 只认 RESULT<数字>，末行的汇总 "RESULT: FAIL(4/9)" 不是断言，混进来会污染基线红项
-    return [m.group(1) for m in re.finditer(r"^(RESULT\d+): FAIL", r.stdout, re.M)]
+    if re.search(r"^RESULT-OFFLINE: FAIL", r.stdout, re.M):
+        print(r.stdout.strip())
+        raise SystemExit("RESULT-OFFLINE 红：abort 规则没生效，这一轮的证明全部作废，先修 shell_check.py")
+    return {m.group(1): m.group(0).strip()
+            for m in re.finditer(r"^(RESULT\d+): FAIL.*$", r.stdout, re.M)}
 
 
 def main():
     names = sys.argv[1:] or list(MUT)
-    src = {CSS: CSS.read_text(encoding="utf-8"), HTML: HTML.read_text(encoding="utf-8")}
+    # 快照按 bytes：read_text/write_text 会把 CRLF 读成 LF、写回时按 os.linesep 落地，
+    # 今天恰好两个目标全是 CRLF 才没露馅；Task 2-4 用会写 LF 的工具改文件后，文本模式就会串改字节。
+    snap = {p: p.read_bytes() for p in (CSS, HTML)}
+    txt = {p: snap[p].decode("utf-8") for p in snap}
     base = run()
-    print(f"变异前基线红项：{base or '全绿'}")
+    print(f"变异前基线红项：{list(base) or '全绿'}")
     bad = 0
     for name in names:
         path, old, new, want = MUT[name]
-        original = src[path]
-        if old not in original:
+        original, text = snap[path], txt[path]
+        mutated, hits = locate(text, old, new)
+        if mutated is None:
             print(f"{name}: SKIP —— 锚点不在 {path.name} 中（前置任务没做到位，先修那个再继续）")
             bad += 1
             continue
@@ -408,14 +501,26 @@ def main():
             print(f"{name}: INVALID —— {want} 变异前就红，先把基线跑绿再谈证明")
             bad += 1
             continue
-        path.write_text(original.replace(old, new, 1), encoding="utf-8")
+        if hits > 1:
+            print(f"{name}: ANCHOR 锚点在 {path.name} 里命中 {hits} 处，replace 只动第一处——"
+                  f"确认第一处就是你要改的选择器，否则这条证明打在错对象上")
+        path.write_bytes(mutated.encode("utf-8"))
         try:
             reds = run()
         finally:
-            path.write_text(original, encoding="utf-8")
-            assert path.read_text(encoding="utf-8") == original, f"{name} 还原失败"
+            path.write_bytes(original)
+            assert path.read_bytes() == original, f"{name} 还原失败（字节级）"
+        got = list(reds)
         hit = want in reds
-        print(f"{name}: {'OK 变红' if hit else 'BAD 没变红'}  期望 {want} 红，实际 {reds or '全绿'}")
+        print(f"{name}: {'OK 变红' if hit else 'BAD 没变红'}  期望 {want} 红，实际 {got or '全绿'}")
+        if hit:
+            # 打全行：标签 + 判定值。check("3 …")/check("9 …") 是合取断言，
+            # 只有看到红的原因，才知道红的是这次变异而不是别的东西。
+            print(f"        证据 {reds[want]}")
+        extra = sorted(set(reds) - set(base))
+        if extra != [want]:
+            print(f"        COLLATERAL 相对基线新红 {extra or '无'}，目标只有 {want}"
+                  f"（共现的红说明断言承重，但它不是这次要证的那条）")
         if not hit:
             bad += 1
     if bad:
@@ -427,33 +532,37 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: 现在就跑一次全量变异（有 2 条当场能被证明，其余 8 条必须被拒绝）**
+- [x] **Step 4: 现在就跑一次全量变异（有 2 条当场能被证明，其余 9 条必须被拒绝）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py`
-实测（改壳前，10 个变异，exit=1）：
+实测（改壳前，11 个变异，exit=1）：
 
 ```
 变异前基线红项：['RESULT1', 'RESULT2', 'RESULT5', 'RESULT8']
 sidebar_w_zero: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
 no_sticky: INVALID —— RESULT1 变异前就红，先把基线跑绿再谈证明
 grid_one_col: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
-page_id_gone: OK 变红  期望 RESULT3 红，实际 ['RESULT1', 'RESULT2', 'RESULT5', 'RESULT3', 'RESULT8']
+ws_container_gone: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
+page_id_gone: OK 变红  期望 RESULT3 红，实际 ['RESULT1', 'RESULT2', 'RESULT3', 'RESULT5', 'RESULT8']
+        证据 RESULT3: FAIL  3 12 页均有内容且无未捕获异常  空页=['rules(-1)'] JS错误=[]
 ws_min_width: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
 sidebar_class_gone: SKIP —— 锚点不在 index.html 中（前置任务没做到位，先修那个再继续）
 nav_dup: OK 变红  期望 RESULT6 红，实际 ['RESULT1', 'RESULT2', 'RESULT5', 'RESULT6', 'RESULT8']
+        证据 RESULT6: FAIL  6 单高亮且随页切换  ['chat(chat,chat)']
 chat_vh_old: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
 modal_container: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
 narrow_no_degrade: SKIP —— 锚点不在 styles.css 中（前置任务没做到位，先修那个再继续）
-8 项未被证明
+9 项未被证明
 ```
 
-（上块的末行 `8 项未被证明` 是 `SystemExit(str)` 打到 **stderr** 的，exit=1；只重定向 stdout 会看不到这一行。）
+（上块的末行 `9 项未被证明` 是 `SystemExit(str)` 打到 **stderr** 的，exit=1；只重定向 stdout 会看不到这一行。计数口径：`未被证明 = SKIP + INVALID + BAD 没变红`，共现的 `COLLATERAL` 不计入——它是证据不是失败。）
 
 `page_id_gone` / `nav_dup` 这两条**改壳前就能证明**，因为它们量的是今天已存在的东西（页面 section 的 id、导航项唯一性）。这一步就是它们的责任：先证明 RESULT3/RESULT6 不是空跑，后面换壳时才有资格说「它俩仍绿」。
 
-三种输出的含义，都不许当成通过：
-- **OK 变红**：断言非空跑，且只被这一处变异打红（`实际` 列要逐字核对——若红名单里多了没预期的条目，说明变异串撞到了别处，见下面的唯一性）。
+四种输出的含义，都不许当成通过：
+- **OK 变红**：断言非空跑。下一行的缩进 `证据` 是那条 RESULT 的**完整 FAIL 行**（标签 + 判定值），红的原因必须能在里面读出来——`check("3 …")`/`check("9 …")` 都是合取断言，光看标签会分不清红的是这次变异还是别的东西。再下一行若有 `COLLATERAL`，说明相对基线新红的集合 ≠ 只红目标那一条（`set(reds) - set(base) != {want}`）：共现本身是断言承重的证据，但它不是这次要证的那条，必须逐字读一遍再判断变异串有没有撞到别处（见下面的唯一性）。若锚点在目标文件里命中多于 1 处，还会先打一行 `ANCHOR` 提醒 `replace` 只动了第一处。（`实际` 列现在按编号排序：`shell_check.py` 把 RESULT1..9 攒到测量结束再按 1..9 打印，不再是改前的 1,2,5,3,4,6,7,8,9；输出顺序与本页表格的编号顺序对齐了。）
 - **SKIP**：锚点串还没进文件（Task 2/3/4 没做到位）。这条同时是「计划里的 CSS 片段是否真被写进文件」的探针——漏写 `.modal` 容器块、漏写 `--sidebar-w`、Task 4 那段没落地，都会在这里以 SKIP 现形。
+- **BAD 没变红**： 锚点在、目标断言基线也是绿的，改完它却没红 —— 要么这条断言仍在空跑，要么变异串打到了别的对象。实测口径（在 `/f/tmp` 的驱动副本里把 `page_id_gone` 的 `want` 故意写成 RESULT4）：`page_id_gone: BAD 没变红  期望 RESULT4 红，实际 ['RESULT1', 'RESULT2', 'RESULT3', 'RESULT5', 'RESULT8']`，下面紧跟 `COLLATERAL 相对基线新红 ['RESULT3']，目标只有 RESULT4` —— 红是红了，红的不是要证的那条；这条同样计入「未被证明」。
 - **INVALID**：断言在变异**之前**就已经是红的，这次变异证明不了任何东西。这条预检是我第一版漏掉的，当时 `no_sticky` 打印了 `OK 变红` 而 RESULT1 其实一直红着——假证明比没有证明更糟。注意判定顺序：锚点检查在前，所以 `sidebar_w_zero`（目标 RESULT1 也红）报的是 SKIP 而不是 INVALID。
 
 **每条断言都要有对应的变异**（第一版计划漏了 RESULT3/6/9 三条，等于默许它们空跑）：
@@ -461,18 +570,18 @@ narrow_no_degrade: SKIP —— 锚点不在 styles.css 中（前置任务没做�
 | RESULT | 断言 | 证明它的变异 | 何时可跑 |
 |---|---|---|---|
 | 1 | 侧栏 264 且 sticky | `sidebar_w_zero`、`no_sticky` | Task 2 后 |
-| 2 | 工作区 x=264 | `grid_one_col` | Task 2 后 |
+| 2 | 工作区 x=264 且 `container-name: ws` | `grid_one_col`、`ws_container_gone` | Task 2 后 |
 | 3 | 12 页均有内容、无 pageerror | `page_id_gone` | **改壳前即可（已证）** |
 | 4 | 12 页无横向溢出 | `ws_min_width` | Task 2 后 |
 | 5 | 侧栏内 12 个导航项 | `sidebar_class_gone` | Task 2 后 |
 | 6 | 单高亮且随页切换 | `nav_dup` | **改壳前即可（已证）** |
 | 7 | chat 填满可用高度 | `chat_vh_old` | Task 3 后 |
-| 8 | 模态覆盖视口 + 编辑器单列 | `modal_container` | Task 3 后 |
+| 8 | 模态覆盖视口 + 编辑器是单列 **grid**（`display == "grid"` 且 `tracks == 1`） | `modal_container` | Task 3 后 |
 | 9 | 窄屏降级无溢出 | `narrow_no_degrade` | Task 4 后（此前 RESULT9 是红的，会报 INVALID） |
 
-`nav_dup` 尤其有用：Task 2 若把旧顶栏忘删、留下两份导航，RESULT5（计数变 24）与 RESULT6（双高亮）会当场抓住。
+`nav_dup` 尤其有用，但**功劳要记对断言**（实测口径，不是推测）：Task 2 若把旧顶栏忘删、留下两份导航，真正当场咬住的是 **RESULT6**（`switchPage` 按 `app.js:391-403` 全站 `.nav-link` 切 active → 双高亮）。`RESULT5` 数的是 `.sidebar .nav-link`（`shell_check.py` 的 PROBE `navInSidebar`），忘删的那份在 `.sidebar` **之外**（今天 `index.html:70` 的顶栏就是这个位置）时它仍是 12、照样绿——只有两份导航都落在 `.sidebar` 内才会把计数推到 24。所以 RESULT5 防的是「嵌套/重复的侧栏块」，RESULT6 防的是「任何地方多出高亮」。`app.js:371/391-403` 是本计划的冻结面，不能改代码来迁就这句话，是这句话原本记错了账。
 
-锚点唯一性实测（决定变异是否只改到你想改的那处）：`position: sticky;` 在 `styles.css` 里当前**只有 1 处**（`:101`，`.topbar`），Task 2 删掉它后由 `.sidebar` 接手，仍唯一；`box-sizing: border-box;` 当前 1 处但是 `* { ... }` 单行写法（`:58`），所以 `ws_min_width` 用「`box-sizing` 换行 + `min-width: 0;`」两行组合当锚点——单用 `min-width: 0;` 会命中已有的 4 处（`:1171/:1638/:1725/:1800`）而改错对象；`display: block` 单独有 5 处，所以 `narrow_no_degrade` 用整行 `.app-shell { display: block; }`（当前 0 处，Task 4 落地后唯一）。每次跑完 harness 会断言按字节还原（`assert ... == original`），实测还原后 `pagex-rules`/`助手（重复）`/`min-width: 1200px` 残留计数均为 **0**。
+锚点唯一性实测（决定变异是否只改到你想改的那处）：`position: sticky;` 在 `styles.css` 里当前**只有 1 处**（`:101`，`.topbar`），Task 2 删掉它后由 `.sidebar` 接手，仍唯一；`box-sizing: border-box;` 当前 1 处但是 `* { ... }` 单行写法（`:58`），所以 `ws_min_width` 用「`box-sizing` 换行 + `min-width: 0;`」两行组合当锚点——单用 `min-width: 0;` 会命中已有的 4 处（`:1171/:1638/:1725/:1800`）而改错对象；`display: block` 单独有 5 处，所以 `narrow_no_degrade` 用整行 `.app-shell { display: block; }`（当前 0 处，Task 4 落地后唯一）。新增的 `ws_container_gone` 锚点是 `.workspace {` + `container-type: inline-size;` + `container-name: ws;` 三行组合，**必须带上 `.workspace {` 这半截**：`.modal` 那块（Task 2 Step 4 末尾）有相同的两行容器声明，只锚那两行会命中 2 处。实测它在 Task 2 的 shell CSS 片段里恰好 1 处、在今天的 `styles.css` 里 0 处（所以今天报 SKIP）。另外两条今天就要记住的：`nav_dup` 的锚点 `<a class="nav-link" data-page="chat">助手</a>` 今天 1 处，Task 2 删顶栏、写侧栏后仍应 1 处——若顶栏没删干净它会变 2 处，此时驱动会打 `ANCHOR` 行提醒只改了第一处。`ws_min_width` 与 `ws_container_gone` 的锚点在 `.workspace` 块里相邻但不重叠，各自唯一。换行口径：表里的锚点按 LF 写，驱动会按目标文件自身的换行风格匹配（CRLF 优先，再试 LF），整串按 **bytes** 读写，所以还原是字节级的（`assert path.read_bytes() == original`）——改前用 `read_text`/`write_text` 时，CRLF→LF 的往返只是靠两个目标今天 100% CRLF 才没露馅，而 Task 2-4 会用发 LF 的工具改文件。每次跑完实测还原后 `pagex-rules`/`助手（重复）`/`min-width: 1200px` 残留计数均为 **0**，`git status --short` 空、`git hash-object` 两文件与开工前逐字节相同（`index.html 3553446776…`、`styles.css 97ededd4ac…`）。
 
 harness 在仓库外，无需 commit；第一个参数可覆盖桌面巡检宽度（`shell_check.py 1024` 即 Tauri `minWidth` 那一档）。
 
@@ -646,7 +755,7 @@ Expected: `0`（改前是 3）。非 0 就是漏了 `:224` 那条媒体块里的
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py`
 Expected（本任务结束时应有 **3 红 6 绿**：`RESULT7/8/9`，每条红都指向后面哪个任务修它）：
-- 转 PASS：`RESULT1`、`RESULT2`、`RESULT5`
+- 转 PASS：`RESULT1`、`RESULT2`（现在还含 `.workspace` 的 `container-name: ws`，就是 Step 4 那段）、`RESULT5`
 - **转 FAIL（新红，预期内）**：`RESULT7`。`168px` 这个常量是给「顶栏 60 + `.app-shell` 上下内边距 28+80」凑的；顶栏一撤、`.workspace` 改用 `--ws-pad-t: 28`，`.chat-wrap` 顶边就从实测的 `93` 抬到约 `33`，`chatBottom` 由 `825` 掉到约 `765`，落在判定带 `[814, 901]` 之外。**765 是算术推的，不是实测**：跑完把 harness 打印的真实值记进本步的勾选备注里，Task 3 Step 3 用 `calc(100vh - var(--ws-pad-t) - var(--ws-pad-b))` 修。
 - **转 FAIL（新红，由断言构造决定）**：`RESULT9`。Task 2 给 `.app-shell` 写的是**无条件** `display: grid`，而 RESULT9 断言 390 视口下 `display == "block"`；侧栏此时还占着 264px。Task 4 的 `@media (max-width: 760px)` 降级段修它。
 - 仍 FAIL：`RESULT8`（`tracks: 2`，Task 3 修）
@@ -752,7 +861,7 @@ Expected: `576×4`、`836×3`、`916×2`、`496×2`、`656×1`、`704×1`、`800
 - [ ] **Step 4: 跑 harness（两档宽度都要跑）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py 1024`
-Expected: 两档都只剩 `RESULT9` 红（Task 4 的窄屏降级还没写），末行 `RESULT: FAIL(1/9)`。`RESULT8` 转 PASS 就是 `tracks: 1`，即那条 640px 模态挤两列的既有 bug 被容器查询顺手修掉了；`RESULT7` 的 `chatBottom` 应回到 **825**——这是算术推的：`height: calc(100vh - 28 - 80)` 在 vh=900 得 792，`.workspace` 顶部内边距 28 + 页面自身那 5px 得顶边 33，`33 + 792 = 825`，与改壳前实测的 825 相同。跑出来不是 825 就以实数为准并记在这里，别硬凑。
+Expected: 两档都只剩 `RESULT9` 红（Task 4 的窄屏降级还没写），末行 `RESULT: FAIL(1/9)`。`RESULT8` 转 PASS 就是 `display: 'grid'` 且 `tracks: 1`，即那条 640px 模态挤两列的既有 bug 被容器查询顺手修掉了；`RESULT7` 的 `chatBottom` 应回到 **825**——这是算术推的：`height: calc(100vh - 28 - 80)` 在 vh=900 得 792，`.workspace` 顶部内边距 28 + 页面自身那 5px 得顶边 33，`33 + 792 = 825`，与改壳前实测的 825 相同。跑出来不是 825 就以实数为准并记在这里，别硬凑。
 
 - [ ] **Step 5: 量最窄桌面宽度下的溢出（这是改壳的真实代价，必须量不是猜）**
 
@@ -763,10 +872,10 @@ Expected: 1024 档 `RESULT4` PASS。若 `card-design` 溢出，注意 `.cd-previ
 
 - [ ] **Step 6: 证明断言会变红**
 
-Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col page_id_gone ws_min_width sidebar_class_gone nav_dup chat_vh_old modal_container`
-Expected: 9 行全部 `OK 变红`，exit 0。**故意不带 `narrow_no_degrade`**：此刻 RESULT9 还是红的（Task 4 没做），它会以 `INVALID` 报出来——那不是失败，是时序。
+Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py sidebar_w_zero no_sticky grid_one_col ws_container_gone page_id_gone ws_min_width sidebar_class_gone nav_dup chat_vh_old modal_container`
+Expected: 10 行全部 `OK 变红`，exit 0。**故意不带 `narrow_no_degrade`**：此刻 RESULT9 还是红的（Task 4 没做），它会以 `INVALID` 报出来——那不是失败，是时序。
 任一行 `BAD 没变红` 或 `SKIP` 就是计划本身有问题，停下报告，不要继续。
-（`SKIP` 的意思是锚点串在文件里找不到 —— 例如把 `.modal` 那条容器块漏写了，此时断言根本没东西可测，继续下去就是自欺。逐行核对 `实际` 列：除目标外不应多出别的红项，多了说明变异串撞到了别处。）
+（`SKIP` 的意思是锚点串在文件里找不到 —— 例如把 `.modal` 那条容器块漏写了，此时断言根本没东西可测，继续下去就是自欺。逐行核对缩进的 `证据` 与 `COLLATERAL`：目标那条的判定值要肉眼可读（`grid_one_col` 之后 RESULT2 应显示 `containerName` 仍然对得上、`x` 不等于 264；`ws_container_gone` 之后应显示 `containerName=none`），除目标外多出的红项要在 `COLLATERAL` 里点得名，说不清就怀疑变异串撞到了别处。）
 
 - [ ] **Step 7: 视觉回归 + Agent 回归**
 
@@ -822,13 +931,13 @@ git commit -m "refactor(shell): 工作区断点改容器查询，chat 高度去�
 - [ ] **Step 2: 跑 harness（两档）**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_check.py 1024`
-Expected: 两档都全部 9 条 PASS，末行 `RESULT: PASS`，exit 0。这是本计划的收口点，也是 `shell_mutate.py` 里 `no_sticky` 等变异从 INVALID 转成可证明的前提。
+Expected: 两档都全部 9 条 PASS 且 `RESULT-OFFLINE: PASS`，末行 `RESULT: PASS`，exit 0。这是本计划的收口点，也是 `shell_mutate.py` 里 `no_sticky` 等变异从 INVALID 转成可证明的前提。编号全绿但 `RESULT-OFFLINE` 红时末行是 `RESULT: FAIL(0/9)`（分子只数编号断言，离线那条按 `RESULT-STREAM` 的房规单列、不进分母），所以这一步同时看 exit 码与那一行本身。
 
-- [ ] **Step 3: 跑全量变异，把 9 条断言一次证明干净**
+- [ ] **Step 3: 跑全量变异，把 9 条断言（11 个变异）一次证明干净**
 
 Run: `cd /f/Qoder/自媒体/.verify-shell && PYTHONIOENCODING=utf-8 "/f/Qoder/自媒体/Easel/.venv/Scripts/python.exe" shell_mutate.py`
-Expected: 10 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。
-（`sidebar_w_zero` 会让 RESULT1 与 RESULT2 同时变红：侧栏宽 0 → 工作区 x=0。这不影响判定，目标 RESULT1 红即算证明，但要知道邻居也被牵动了——单一断言被单一变异打红这件事，只有 `no_sticky`、`page_id_gone`、`nav_dup` 等几条成立。）
+Expected: 11 行全部 `OK 变红`（`RESULT1` 由 `sidebar_w_zero` 与 `no_sticky` 各证一次、`RESULT2` 由 `grid_one_col` 与 `ws_container_gone` 各证一次），末行 `全部断言已被证明会变红`，exit 0。基线红项那行应打印 `全绿`——若还列出任何 `RESULTn`，说明 Step 2 的绿是假的。
+（`sidebar_w_zero` 会让 RESULT1 与 RESULT2 同时变红：侧栏宽 0 → 工作区 x=0。这不影响判定，目标 RESULT1 红即算证明，但驱动会在它下面打一行 `COLLATERAL 相对基线新红 ['RESULT1', 'RESULT2']，目标只有 RESULT1` —— 那行现在是自动的，不用靠人盯 `实际` 列。单一断言被单一变异打红这件事，只有 `no_sticky`、`page_id_gone`、`nav_dup`、`ws_container_gone` 等几条成立。）
 
 
 - [ ] **Step 4: Commit**
@@ -944,8 +1053,8 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 
 ## Task 6: 端到端总验收
 
-- [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS`，exit 0（9 条）
-- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **10** 个变异）→ 首行基线红项打印 `全绿`，10 行 `OK 变红`，末行 `全部断言已被证明会变红`，exit 0
+- [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（9 条编号断言；离线行红时末行是 `RESULT: FAIL(0/9)`，以 exit 码为准）
+- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`），末行 `全部断言已被证明会变红`，exit 0
 - [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
 - [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
   **这两个脚本没有 `WB_REPO` 会直接抛「需要 WB_REPO 环境变量」**（`check_registry.mjs:13`，实测），不带它就跑是假通过的前置形态：你会看到 Node 堆栈而不是 PASS。
