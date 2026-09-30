@@ -59,34 +59,34 @@
       </div>
     </div>
 
-    <!-- ========== 顶部导航 ========== -->
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-logo">W</div>
-        <span>全域自媒体工作台</span>
-      </div>
-      <nav class="nav" id="mainNav">
-        <a class="nav-link active" data-page="dashboard">仪表盘</a>
-        <a class="nav-link" data-page="chat">助手</a>
-        <a class="nav-link" data-page="hot-radar">热点雷达</a>
-        <a class="nav-link" data-page="content">内容创作</a>
-        <a class="nav-link" data-page="video-script">视频脚本</a>
-        <a class="nav-link" data-page="card-design">卡片设计</a>
-        <a class="nav-link" data-page="calendar">内容日历</a>
-        <a class="nav-link" data-page="assets">素材资源库</a>
-        <a class="nav-link" data-page="metrics">数据复盘</a>
-        <a class="nav-link" data-page="templates">模板中心</a>
-        <a class="nav-link" data-page="rules">规则库</a>
-        <a class="nav-link" data-page="settings">账号与设置</a>
-      </nav>
-      <div class="topbar-right">
-        <span id="userBadge" class="tag brand hidden"></span>
-        <button id="btnLogout" class="btn btn-ghost btn-sm hidden">退出</button>
-      </div>
-    </header>
+    <!-- ========== 常驻外壳：左栏 + 右工作区 ========== -->
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-logo">W</div>
+          <span>全域自媒体工作台</span>
+        </div>
+        <nav class="nav" id="mainNav">
+          <a class="nav-link active" data-page="dashboard">仪表盘</a>
+          <a class="nav-link" data-page="chat">助手</a>
+          <a class="nav-link" data-page="hot-radar">热点雷达</a>
+          <a class="nav-link" data-page="content">内容创作</a>
+          <a class="nav-link" data-page="video-script">视频脚本</a>
+          <a class="nav-link" data-page="card-design">卡片设计</a>
+          <a class="nav-link" data-page="calendar">内容日历</a>
+          <a class="nav-link" data-page="assets">素材资源库</a>
+          <a class="nav-link" data-page="metrics">数据复盘</a>
+          <a class="nav-link" data-page="templates">模板中心</a>
+          <a class="nav-link" data-page="rules">规则库</a>
+          <a class="nav-link" data-page="settings">账号与设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span id="userBadge" class="tag brand hidden"></span>
+          <button id="btnLogout" class="btn btn-ghost btn-sm hidden">退出</button>
+        </div>
+      </aside>
 
-    <!-- ========== 主体 ========== -->
-    <main class="app-shell">
+      <main class="workspace">
       <!-- 仪表盘页 -->
       <section id="page-dashboard" class="page">
         <div class="hero">
@@ -224,7 +224,8 @@
       <section id="page-rules" class="page hidden"></section>
 
       <section id="page-settings" class="page hidden"></section>
-    </main>
+      </main>
+    </div>
 
     <!-- Toast 提示 -->
     <div id="toast" class="hidden" style="position:fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: var(--surface-strong); border: 1px solid var(--line-strong); border-radius: 10px; z-index: 200; font-size: 13px; box-shadow: var(--shadow-md);"></div>

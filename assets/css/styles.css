@@ -43,6 +43,11 @@
   --weibo: #e6162d;     /* 微博 */
   --toutiao: #f04142;   /* 今日头条 */
 
+  /* shell 尺寸：侧栏宽度沿用 Easel 实测值 */
+  --sidebar-w: 264px;
+  --ws-pad-t: 28px;
+  --ws-pad-b: 80px;
+
   /* 圆角 */
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -96,20 +101,6 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
   letter-spacing: 0.01em;
 }
 
-/* ── 顶部导航 ── */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 32px;
-  background: var(--surface-strong);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--line);
-}
-
 .brand {
   display: flex;
   align-items: center;
@@ -144,17 +135,72 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 .nav-link:hover { color: var(--text); background: var(--surface-soft); }
 .nav-link.active { color: var(--brand); background: rgba(89, 196, 255, 0.1); }
 
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 /* ── 主体容器 ── */
 .app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  align-items: start;
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 14px 16px;
+  background: var(--surface-strong);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: 60;
+}
+.sidebar .nav {
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  overflow: visible;
+}
+.sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  white-space: normal;
+}
+.sidebar .nav-link.active::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 3px;
+  height: 16px;
+  margin-left: -12px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+}
+.sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.workspace {
+  container-type: inline-size;
+  container-name: ws;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
   max-width: 1320px;
   margin: 0 auto;
-  padding: 28px 32px 80px;
+  padding: var(--ws-pad-t) 32px var(--ws-pad-b);
+}
+.modal {
+  container-type: inline-size;
+  container-name: ws;
 }
 
 /* ── 卡片 ── */
@@ -220,8 +266,6 @@ h1, h2, h3, button, .eyebrow, .nav-link, .platform-name, .stat-num {
 }
 @media (max-width: 640px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-  .app-shell { padding: 20px 16px 60px; }
-  .topbar { padding: 12px 16px; gap: 12px; }
 }
 
 /* ── 仪表盘统计卡 ── */
