@@ -1145,7 +1145,7 @@ git commit -m "docs(settings): 代理模式下说明助手页需直连"
 ## Task 6: 端到端总验收
 
 - [ ] **Step 1:** `shell_check.py` 与 `shell_check.py 1024` → 两档都 `RESULT: PASS` 且 `RESULT-OFFLINE: PASS`，exit 0（9 条编号断言；离线行红时末行是 `RESULT: FAIL(0/9)`，以 exit 码为准）
-- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`；`nav_dup` 带预期的 `COLLATERAL`），末行 `全部断言已被证明会变红`，exit 0
+- [ ] **Step 2:** `shell_mutate.py`（不带参数，跑全部 **11** 个变异）→ 首行基线红项打印 `全绿`（这一行被打出来 = harness 把话说完了；空跑/挂死时驱动会先中止）、`RESULT-OFFLINE: PASS`，11 行 `OK 变红`（每行下面带 `证据`；`sidebar_w_zero`/`grid_one_col`/`sidebar_class_gone`/`nav_dup` 四条各带预期的 `COLLATERAL` —— 四对的具体名单与成因见 Task 4 Step 3 的「Task 2 实测补记」，那四对一起出现才是对的），末行 `全部断言已被证明会变红`，exit 0
 - [ ] **Step 3:** `drive.py` → `RESULT-STREAM` + `RESULT1…RESULT11` 共 12 行全 PASS，exit 0（Agent 没被牵连）
 - [ ] **Step 4:** `export WB_REPO="F:/Qoder/自媒体/自媒体工作台/workbench"` 后跑 `node /f/tmp/check_registry.mjs` → `45/45 passed`；`node /f/tmp/check_dangling.mjs` → `无悬挂引用`（平台注册表那轮改动仍在，未被 shell 改动冲掉）。
   **这两个脚本没有 `WB_REPO` 会直接抛「需要 WB_REPO 环境变量」**（`check_registry.mjs:13`，实测），不带它就跑是假通过的前置形态：你会看到 Node 堆栈而不是 PASS。
